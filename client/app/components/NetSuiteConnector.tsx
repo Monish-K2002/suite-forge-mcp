@@ -65,35 +65,4 @@ export class NetSuiteConnector {
   }
 }
 
-// Mock implementation for development
-export const mockNetSuiteConnector = {
-  async sendMessage(message: string): Promise<string> {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
-    
-    // Mock responses based on message content
-    const lowerMessage = message.toLowerCase();
-    
-    if (lowerMessage.includes("hello") || lowerMessage.includes("hi")) {
-      return "Hello! I'm your NetSuite AI assistant. I can help you with inventory management, financial reports, customer data, and more. What would you like to know?";
-    }
-    
-    if (lowerMessage.includes("inventory")) {
-      return "I can help you with inventory management in NetSuite. I can check stock levels, track items, generate inventory reports, and help with reorder points. What specific inventory information do you need?";
-    }
-    
-    if (lowerMessage.includes("customer") || lowerMessage.includes("client")) {
-      return "I can assist with customer-related tasks in NetSuite. I can help you find customer information, track sales history, manage customer relationships, and generate customer reports. What customer data are you looking for?";
-    }
-    
-    if (lowerMessage.includes("report") || lowerMessage.includes("analytics")) {
-      return "I can help you generate various reports in NetSuite including financial reports, sales analytics, inventory reports, and custom dashboards. What type of report would you like to create?";
-    }
-    
-    if (lowerMessage.includes("sales") || lowerMessage.includes("revenue")) {
-      return "I can help you with sales data and revenue analysis in NetSuite. I can track sales performance, analyze revenue trends, manage sales orders, and provide insights on your sales pipeline. What sales information do you need?";
-    }
-    
-    return `I understand you're asking about "${message}". As your NetSuite AI assistant, I can help you with various NetSuite functions including inventory management, customer relations, financial reporting, and data analysis. Could you be more specific about what you'd like to accomplish?`;
-  }
-};
+export default NetSuiteConnector;
