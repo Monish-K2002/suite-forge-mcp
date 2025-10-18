@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import styles from './Chatbot.module.css';
 
-import { FiSend, FiMoon, FiSun } from 'react-icons/fi';
+import { FiSend, FiMoon, FiSun, FiPlus } from 'react-icons/fi';
 
 interface ChatbotProps {
   onSendMessage: (message: string) => Promise<string>;
@@ -13,6 +13,28 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage }) => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [inputValue]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (attachmentButtonRef.current && !attachmentButtonRef.current.contains(event.target as Node)) {
+        setShowAttachmentMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -25,6 +47,10 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage }) => {
     setInputValue('');
     const botResponse = await onSendMessage(userMessage);
     setMessages((prevMessages) => [...prevMessages, { text: botResponse, sender: 'bot' }]);
+  };
+
+  const handleAttachmentClick = () => {
+    setShowAttachmentMenu(!showAttachmentMenu);
   };
 
   return (
@@ -43,12 +69,23 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage }) => {
         ))}
       </div>
       <div className={styles.inputContainer}>
-        <input
-          type="text"
+        <div className={styles.attachmentContainer}>
+          <button ref={attachmentButtonRef} onClick={handleAttachmentClick} className={styles.attachmentButton}><FiPlus /></button>
+          {showAttachmentMenu && (
+            <div className={styles.attachmentMenu}>
+              <ul>
+                <li>Feature coming soon</li>
+              </ul>
+            </div>
+          )}
+        </div>
+        <textarea
+          ref={textareaRef}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+          onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
           placeholder="Type your message..."
+          rows={1}
         />
         <button onClick={handleSendMessage}><FiSend /></button>
       </div>
