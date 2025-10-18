@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Chatbot from './components/Chatbot';
+import HistoryPanel from './components/HistoryPanel';
 import NetSuiteConnector from './components/NetSuiteConnector';
 
 export default function Home() {
@@ -13,13 +15,20 @@ export default function Home() {
     process.env.NEXT_PUBLIC_NETSUITE_API_KEY || ''
   );
 
+  const [showHistory, setShowHistory] = useState(false);
+
   const handleSendMessage = async (message: string) => {
     return await netSuiteConnector.sendMessage(message);
   };
 
+  const toggleHistory = () => {
+    setShowHistory(!showHistory);
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-gray-100 dark:bg-gray-900">
-      <Chatbot onSendMessage={handleSendMessage} />
+    <main className="flex min-h-screen bg-gray-100 dark:bg-gray-900">
+      <HistoryPanel showHistory={showHistory} />
+      <Chatbot onSendMessage={handleSendMessage} toggleHistory={toggleHistory} />
     </main>
   );
 }

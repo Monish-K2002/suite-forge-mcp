@@ -3,15 +3,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './Chatbot.module.css';
 
-import { FiSend, FiMoon, FiSun, FiPlus } from 'react-icons/fi';
+import { FiSend, FiMoon, FiSun, FiPlus, FiClock } from 'react-icons/fi';
 
 interface ChatbotProps {
   onSendMessage: (message: string) => Promise<string>;
+  toggleHistory: () => void;
 }
 
 import { useDarkMode } from '../contexts/DarkModeContext';
 
-const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage }) => {
+const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory }) => {
   const { isDarkMode } = useDarkMode();
   const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -61,6 +62,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage }) => {
   return (
     <div className={`${styles.chatbotContainer} ${isDarkMode ? styles.darkMode : ''}`}>
       <div className={styles.header}>
+        <button onClick={toggleHistory} className={styles.historyButton}><FiClock /></button>
         <h2>NetSuite MCP Connector</h2>
       </div>
       <div ref={messageListRef} className={styles.messageList}>
