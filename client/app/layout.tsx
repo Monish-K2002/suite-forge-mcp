@@ -1,7 +1,10 @@
-import type { Metadata } from "next";
+"use client"
+
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "./components/Navbar";
+import { useState, useEffect } from "react";
+import ConfigModal from "./components/ConfigModal";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,10 +16,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "NetSuite AI Assistant",
-  description: "Intelligent chatbot powered by NetSuite AI connector",
-};
+import { DarkModeProvider } from "./contexts/DarkModeContext";
+import LayoutClient from "./components/LayoutClient";
 
 export default function RootLayout({
   children,
@@ -28,8 +29,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Navbar netSuiteStatus={true} aiStatus={true} />
-        {children}
+        <DarkModeProvider>
+          <LayoutClient>{children}</LayoutClient>
+        </DarkModeProvider>
       </body>
     </html>
   );

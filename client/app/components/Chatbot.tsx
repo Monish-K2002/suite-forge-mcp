@@ -9,13 +9,22 @@ interface ChatbotProps {
   onSendMessage: (message: string) => Promise<string>;
 }
 
+import { useDarkMode } from '../contexts/DarkModeContext';
+
 const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage }) => {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { isDarkMode } = useDarkMode();
   const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attachmentButtonRef = useRef<HTMLButtonElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (messageListRef.current) {
+      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -36,10 +45,6 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage }) => {
     };
   }, []);
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-  };
-
   const handleSendMessage = async () => {
     if (inputValue.trim() === '') return;
     const userMessage = inputValue;
@@ -57,11 +62,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage }) => {
     <div className={`${styles.chatbotContainer} ${isDarkMode ? styles.darkMode : ''}`}>
       <div className={styles.header}>
         <h2>NetSuite MCP Connector</h2>
-        <button onClick={toggleDarkMode} className={styles.toggleButton}>
-          {isDarkMode ? <FiSun /> : <FiMoon />}
-        </button>
       </div>
-      <div className={styles.messageList}>
+      <div ref={messageListRef} className={styles.messageList}>
         {messages.map((message, index) => (
           <div key={index} className={`${styles.message} ${styles[message.sender]}`}>
             {message.text}

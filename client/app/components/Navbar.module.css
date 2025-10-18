@@ -23,6 +23,16 @@
 .statusIndicators {
   display: flex;
   gap: 1.5rem;
+  align-items: center;
+}
+
+.configButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: #888;
+    margin-left: 1.5rem;
 }
 
 .statusIndicator {
