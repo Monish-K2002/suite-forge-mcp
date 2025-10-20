@@ -6,13 +6,19 @@ import { FiSend, FiMoon, FiSun, FiPlus, FiClock } from 'react-icons/fi';
 interface ChatbotProps {
   onSendMessage: (message: string) => Promise<string>;
   toggleHistory: () => void;
+  messages: { text: string; sender: 'user' | 'bot' }[];
+  setMessages: (
+    messages: 
+      | { text: string; sender: 'user' | 'bot' }[]
+      | ((prevMessages: { text: string; sender: 'user' | 'bot' }[]) => { text: string; sender: 'user' | 'bot' }[])
+  ) => void;
 }
 
 import { useDarkMode } from '../contexts/DarkModeContext';
 
-const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory }) => {
+const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, messages, setMessages }) => {
   const { isDarkMode } = useDarkMode();
-  const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
+  // const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -49,8 +55,20 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory }) => {
     const userMessage = inputValue;
     setMessages((prevMessages) => [...prevMessages, { text: userMessage, sender: 'user' }]);
     setInputValue('');
-    const botResponse = await onSendMessage(userMessage);
-    setMessages((prevMessages) => [...prevMessages, { text: botResponse, sender: 'bot' }]);
+
+    // const botResponse = await onSendMessage(userMessage);
+    const response = await fetch("http://localhost:8000/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: userMessage,
+      }),
+    });
+    const data = await response.json()
+    console.log("Chat Response: ",data)
+    setMessages((prevMessages) => [...prevMessages, { text: data, sender: 'bot' }]);
   };
 
   const handleAttachmentClick = () => {

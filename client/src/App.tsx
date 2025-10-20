@@ -14,6 +14,7 @@ export default function App() {
   );
 
   const [showHistory, setShowHistory] = useState(false);
+  const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
 
   const handleSendMessage = async (message: string) => {
     return await netSuiteConnector.sendMessage(message);
@@ -27,7 +28,12 @@ export default function App() {
     <div className="flex h-[calc(100vh-5rem)] w-full bg-gray-100 dark:bg-gray-900">
       <HistoryPanel showHistory={showHistory} />
       <div className="flex flex-col flex-grow">
-        <Chatbot onSendMessage={handleSendMessage} toggleHistory={toggleHistory} />
+        <Chatbot 
+        onSendMessage={handleSendMessage} 
+        toggleHistory={toggleHistory} 
+        messages={messages}
+        setMessages={setMessages}
+        />
       </div>
     </div>
   );

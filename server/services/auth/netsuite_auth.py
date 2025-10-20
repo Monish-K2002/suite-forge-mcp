@@ -37,7 +37,7 @@ class NetSuiteAuthService:
         params = {
             'response_type': 'code',
             'client_id': config['client_id'],
-            'redirect_uri': config.get('redirect_uri', 'http://localhost:3001/api/auth/callback'),
+            'redirect_uri': config.get('redirect_uri', 'http://localhost:8000/callback'),
             'scope': config.get('scope', 'mcp'),
             'state': session_id,
             'code_challenge': pkce['code_challenge'],
@@ -62,7 +62,7 @@ class NetSuiteAuthService:
         params = {
             'grant_type': 'authorization_code',
             'code': code,
-            'redirect_uri': config.get('redirect_uri', 'http://localhost:3001/api/auth/callback'),
+            'redirect_uri': config.get('redirect_uri', 'http://localhost:8000/callback'),
             'client_id': config['client_id'],
             'code_verifier': verifier
         }

@@ -59,6 +59,7 @@ Create environment files before running the stack:
 ### Start the FastAPI backend
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host localhost --port 8000 --reload  # for local development
 ```
 
 ### Start the Vite frontend
