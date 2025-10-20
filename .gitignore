@@ -1,7 +1,7 @@
-client/node_modules
-client/.next
+client-next/node_modules
+client-next/.next
 .env
-client-vite/dist
-client-vite/node_modules
+client/dist
+client/node_modules
 server/.venv
 server/app/__pycache__/
