@@ -1,18 +1,16 @@
-'use client';
-
 import { useState } from 'react';
 import Chatbot from './components/Chatbot';
 import HistoryPanel from './components/HistoryPanel';
 import NetSuiteConnector from './components/NetSuiteConnector';
 
-export default function Home() {
-  // IMPORTANT: Create a .env.local file in the client directory and add the following environment variables:
-  // NEXT_PUBLIC_NETSUITE_API_ENDPOINT=your_netsuite_api_endpoint
-  // NEXT_PUBLIC_NETSUITE_API_KEY=your_netsuite_api_key
+export default function App() {
+  // IMPORTANT: Create a .env file in the client-vite directory and add the following environment variables:
+  // VITE_NETSUITE_API_ENDPOINT=your_netsuite_api_endpoint
+  // VITE_NETSUITE_API_KEY=your_netsuite_api_key
 
   const netSuiteConnector = new NetSuiteConnector(
-    process.env.NEXT_PUBLIC_NETSUITE_API_ENDPOINT || '',
-    process.env.NEXT_PUBLIC_NETSUITE_API_KEY || ''
+    import.meta.env.VITE_NETSUITE_API_ENDPOINT || '',
+    import.meta.env.VITE_NETSUITE_API_KEY || ''
   );
 
   const [showHistory, setShowHistory] = useState(false);
@@ -26,11 +24,11 @@ export default function Home() {
   };
 
   return (
-    <main className="flex h-[calc(100vh-5rem)] w-full bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-[calc(100vh-5rem)] w-full bg-gray-100 dark:bg-gray-900">
       <HistoryPanel showHistory={showHistory} />
       <div className="flex flex-col flex-grow">
         <Chatbot onSendMessage={handleSendMessage} toggleHistory={toggleHistory} />
       </div>
-    </main>
+    </div>
   );
 }
