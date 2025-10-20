@@ -1,128 +1,73 @@
-# NetSuite AI Chatbot
+# React + TypeScript + Vite
 
-A modern, responsive chat interface for NetSuite AI integration built with Next.js 15, React 19, and Tailwind CSS.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Features
+Currently, two official plugins are available:
 
-### 🎨 Modern UI Design
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
-- **Dark/Light Mode**: Automatic theme switching based on system preferences
-- **Smooth Animations**: Fade-in effects for messages and typing indicators
-- **Custom Scrollbar**: Styled scrollbar for better visual appeal
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-### 💬 Chat Interface
-- **Message Bubbles**: Distinct styling for user and assistant messages
-- **Typing Indicators**: Animated dots showing when the AI is responding
-- **Message Status**: Visual indicators for sending, sent, and error states
-- **Auto-scroll**: Automatically scrolls to new messages
-- **Keyboard Shortcuts**: Press Enter to send, Shift+Enter for new lines
+## React Compiler
 
-### 🚀 NetSuite Integration
-- **AI Connector**: Ready-to-integrate NetSuite AI connector with mock implementation
-- **Quick Actions**: Pre-defined buttons for common NetSuite tasks
-- **Error Handling**: Graceful error handling with user-friendly messages
-- **Connection Status**: Visual indicator showing connection status
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-### 🎯 Quick Actions
-- Show inventory levels
-- Generate sales report
-- Find customer information
-- Check recent transactions
-- Help with NetSuite setup
+## Expanding the ESLint configuration
 
-## Getting Started
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-### Installation
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-1. Navigate to the client directory:
-```bash
-cd client
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
 
-2. Install dependencies:
-```bash
-npm install
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
-
-3. Start the development server:
-```bash
-npm run dev
-```
-
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Project Structure
-
-```
-client/
-├── app/
-│   ├── components/
-│   │   └── NetSuiteConnector.tsx    # NetSuite AI connector logic
-│   ├── globals.css                  # Global styles and animations
-│   ├── layout.tsx                   # Root layout component
-│   └── page.tsx                     # Main chat interface
-├── public/                          # Static assets
-└── package.json                     # Dependencies and scripts
-```
-
-## NetSuite AI Connector
-
-The `NetSuiteConnector` class provides a clean interface for integrating with NetSuite AI services:
-
-```typescript
-const connector = new NetSuiteConnector(apiEndpoint, apiKey);
-const response = await connector.sendMessage("Show me inventory levels");
-```
-
-### Mock Implementation
-
-For development and testing, a mock implementation is included that simulates NetSuite AI responses based on message content.
-
-## Customization
-
-### Styling
-- Modify `globals.css` for custom animations and styles
-- Update Tailwind classes in components for different color schemes
-- Add custom CSS variables for theming
-
-### NetSuite Integration
-- Replace the mock implementation with actual NetSuite API calls
-- Add authentication and authorization logic
-- Implement data fetching and processing functions
-
-### Features
-- Add file upload capabilities
-- Implement message search and history
-- Add user authentication
-- Create conversation persistence
-
-## Technologies Used
-
-- **Next.js 15**: React framework with App Router
-- **React 19**: Latest React features and hooks
-- **TypeScript**: Type-safe development
-- **Tailwind CSS**: Utility-first CSS framework
-- **Geist Font**: Modern typography
-
-## Browser Support
-
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License.

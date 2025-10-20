@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .env
 
 client/node_modules
@@ -5,3 +6,12 @@ client/dist
 
 server/.venv
 server/app/__pycache__
+=======
+client-next/node_modules
+client-next/.next
+.env
+client/dist
+client/node_modules
+server/.venv
+server/app/__pycache__/
+>>>>>>> new-design
