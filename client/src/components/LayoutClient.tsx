@@ -16,6 +16,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   const [selectedModel, setSelectedModel] = useState('')
   const [apiProvider, setApiProvider] = useState('')
   const [apiKey, setApiKey] = useState('')
+    const [inUseModelName, setInUseModelName] = useState<string | null>(null);
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
@@ -32,6 +33,8 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
         setApiKey={setApiKey}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
+        inUseModelName={inUseModelName}
+        setInUseModelName={setInUseModelName}
       />}
       {children}
     </div>

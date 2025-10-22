@@ -5,3 +5,5 @@ client/dist
 client/node_modules
 server/.venv
 server/app/__pycache__/
+**/__pycache__/
+server/cache.data

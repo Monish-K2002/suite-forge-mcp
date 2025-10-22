@@ -133,7 +133,17 @@
   margin-top: 10px;
 }
 
+.successButton {
+  background-color: #28a745;
+}
+
 .buttonGroup {
     display: flex;
     gap: 10px;
+}
+
+.modelStatus {
+  font-size: 0.875rem;
+  margin-top: 10px;
+  color: #28a745;
 }

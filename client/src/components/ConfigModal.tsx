@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styles from './ConfigModal.module.css';
 
 interface ConfigModalProps {
@@ -13,6 +13,8 @@ interface ConfigModalProps {
   setApiKey: (apiKey: string) => void;
   selectedModel: string;
   setSelectedModel: (selectedModel: string) => void;
+  inUseModelName: string | null;
+  setInUseModelName: (inUseModelName: string | null) => void;
 }
 
 interface Modelname {
@@ -20,37 +22,63 @@ interface Modelname {
   displayName: string;
 }
 
-const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelList, setModelList, apiProvider, setApiProvider, apiKey, setApiKey, selectedModel, setSelectedModel }) => {
-  const [activeTab, setActiveTab] = useState('netsuite');
-  // const [apiProvider, setApiProvider] = useState('openai')
-  // const [models, setModels] = useState<Modelname[]>([])
+const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelList, setModelList, apiProvider, setApiProvider, apiKey, setApiKey, selectedModel, setSelectedModel, inUseModelName, setInUseModelName }) => {
+	const [activeTab, setActiveTab] = useState('netsuite');
+	// const [apiProvider, setApiProvider] = useState('openai')
+	// const [models, setModels] = useState<Modelname[]>([])
 
-  const handleProviderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const provider = event.target.value;
-    setApiProvider(provider);
-    setModelList([]);
-  };
+	const getCacheConfig = () => {
+		fetch("http://localhost:8000/get-cache")
+			.then(response => response.json())
+			.then(data => {
+				setApiProvider(data.api_provider)
+				setApiKey(data.api_key)
+				setSelectedModel(data.selected_model)
+			})
+	}
 
-  const handleNetsuiteAuth = async () => {
-    const clientIdInput = document.getElementById("client-id");
-    const clientId = clientIdInput instanceof HTMLInputElement ? clientIdInput.value : '';
+	useEffect(() => {
+		getCacheConfig()
+	}, [])
 
-    const accountIdInput = document.getElementById("netsuite-account-id");
-    const accountId = accountIdInput instanceof HTMLInputElement ? accountIdInput.value : '';
-    const response = await fetch("http://localhost:8000/auth", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        client_id: clientId,
-        account_id: accountId,
-      }),
-    });
-    const data = await response.json()
-    console.log(data)
-    window.open(data,"popupWindow", "width=400,height=300,scrollbars=yes,resizable=yes");
-  }
+	const handleProviderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+		const provider = event.target.value;
+		setApiProvider(provider);
+		setModelList([]);
+		setSelectedModel('')
+		setInUseModelName(null)
+		setApiKey('')
+	};
+
+	const handleNetsuiteAuth = async () => {
+		const clientIdInput = document.getElementById("client-id");
+		const clientId = clientIdInput instanceof HTMLInputElement ? clientIdInput.value : '';
+
+		const accountIdInput = document.getElementById("netsuite-account-id");
+		const accountId = accountIdInput instanceof HTMLInputElement ? accountIdInput.value : '';
+		const response = await fetch("http://localhost:8000/auth", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			client_id: clientId,
+			account_id: accountId,
+		}),
+		});
+		const data = await response.json()
+
+		const popupWidth = window.screen.width * 0.8; // 80% of screen width
+		const popupHeight = window.screen.height * 0.8; // 80% of screen height
+
+		// 2. Calculate the center position of the screen
+		// window.screen.width/height gets the total screen dimensions
+		const left = (window.screen.width - popupWidth) / 2;
+		const top = (window.screen.height - popupHeight) / 2;
+
+		const windowFeatures = `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`;
+		window.open(data,"popupWindow", windowFeatures);
+	}
 
   const fetchModels = async () => {
     if(!apiProvider) {
@@ -73,7 +101,6 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
       },
     });
     const data = await response.json()
-    // console.log(data)
     if(data?.error) {
       alert(data.error)
       return
@@ -84,6 +111,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
   const useModel = async() => {
     const modelName = document.getElementById("model-select")
     const model = modelName instanceof HTMLSelectElement ? modelName.value : ''
+    const modelText = modelName instanceof HTMLSelectElement ? modelName.options[modelName.selectedIndex].text : ''
 
     if(!model) {
       alert("Please select a model")
@@ -98,8 +126,13 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
         model_name: model,
       }),
     });
+    if (!data.ok) {
+      alert("Failed to set the model in use");
+      return;
+    }
     const response = await data.json()
     console.log(response)
+    setInUseModelName(modelText)
   }
 
   return (
@@ -155,6 +188,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
                   id="api-key" 
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
+                  disabled={inUseModelName ? true : false}
                 />
               </div>
               <div className={styles.inputGroup}>
@@ -162,15 +196,20 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
                 <select 
                   id="model-select"
                   value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedModel(e.target.value)
+                  }}
                 >
                   {modelList.map((model) => (
                     <option key={model.name} value={model.name}>{model.displayName}</option>
                   ))}
                 </select>
               </div>
+              {inUseModelName && (
+                <p className={styles.modelStatus}>Currently "{inUseModelName}" is in use.</p>
+              )}
               <div className={styles.buttonGroup}>
-                <button className={styles.authButton} onClick={useModel}>Use Model</button>
+                <button className={`${styles.authButton} ${inUseModelName ? styles.successButton : ''}`} onClick={useModel}>Use Model</button>
                 <button className={styles.authButton} onClick={fetchModels}>Fetch Models</button>
               </div>
             </div>

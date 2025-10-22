@@ -1,5 +1,7 @@
 from google import genai
 from langchain_google_genai import GoogleGenerativeAI
+from langchain_core.messages import HumanMessage, SystemMessage
+
 
 # Create a single client object
 class AIService:
@@ -49,3 +51,9 @@ class AIService:
             response = self.llm.invoke(message)
             print("LLM Response: ",response)
             return response
+
+    def get_api_details(self):
+        return {
+            "api_key": self.api_key,
+            "api_provider": self.api_provider
+        }

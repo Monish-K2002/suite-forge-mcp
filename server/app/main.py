@@ -1,15 +1,16 @@
-from uuid import NIL
+# from uuid import NIL
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from services.auth.netsuite_auth import NetSuiteAuthService
 from services.ai.ai import AIService
+from services.cache.cache import Cache
 import secrets
 
 app = FastAPI()
 
 auth_service = NetSuiteAuthService()
 ai_service = AIService()
-
+cache = Cache()
 
 origins = [
     "http://localhost:5173",
@@ -40,6 +41,7 @@ async def auth(request: Request):
         "account_id": body.get("account_id"),
     }
     print("Config: ",config)
+    cache.cache_set("netsuite_config", config)
 
     session_id = secrets.token_urlsafe(32)
     authURL = auth_service.get_authorization_url(session_id, config)
@@ -71,6 +73,11 @@ async def use_model(request: Request):
     # print("Body: ",body)
     model_name = body.get("model_name")
     ai_service.use_model(model_name)
+
+    api_details = ai_service.get_api_details()
+    cache.cache_set("selected_model", model_name)
+    cache.cache_set("api_provider", api_details.get("api_provider"))
+    cache.cache_set("api_key", api_details.get("api_key"))
     return "Model Used is: " + model_name
 
 @app.post("/chat")
@@ -80,4 +87,8 @@ async def chat(request: Request):
     message = body.get("message")
     response = ai_service.chat(message)
     return response
+
+@app.get("/get-cache")
+def get_cache():
+    return cache._load_all()
 
