@@ -16,11 +16,16 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   const [selectedModel, setSelectedModel] = useState('')
   const [apiProvider, setApiProvider] = useState('')
   const [apiKey, setApiKey] = useState('')
-    const [inUseModelName, setInUseModelName] = useState<string | null>(null);
+  const [inUseModelName, setInUseModelName] = useState<string | null>(null);
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
-      <Navbar netSuiteStatus={true} aiStatus={true} onConfigClick={() => setShowConfigModal(true)} />
+      <Navbar 
+        // netSuiteStatus={false} 
+        // aiStatus={false} 
+        onConfigClick={() => setShowConfigModal(true)} 
+      />
+
       {showConfigModal && 
       <ConfigModal 
         onClose={() => setShowConfigModal(false)} 

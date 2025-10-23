@@ -92,3 +92,8 @@ async def chat(request: Request):
 def get_cache():
     return cache._load_all()
 
+@app.get("/get-specific-cache")
+def get_specific_cache(request: Request):
+    key = request.query_params.get("key")
+    return cache.cache_get(key)
+
