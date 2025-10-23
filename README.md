@@ -42,6 +42,10 @@ Create environment files before running the stack:
 
 ## Installation
 
+### Export Python Libraries
+1. `cd server`
+2. `pip freeze > requirements.txt`
+
 ### Client
 1. `cd client`
 2. `npm install`
@@ -49,7 +53,9 @@ Create environment files before running the stack:
 ### Server
 1. `cd server`
 2. Create and activate a virtual environment (recommended).
-3. Install dependencies:
+3. `python -m venv venv` to create a virtual environment.
+4. `venv\Scripts\activate` to activate the virtual environment.
+5. Install dependencies:
    ```bash
    pip install fastapi uvicorn[standard] requests python-dotenv
    ```
