@@ -15,6 +15,12 @@ interface ConfigModalProps {
   setSelectedModel: (selectedModel: string) => void;
   inUseModelName: string | null;
   setInUseModelName: (inUseModelName: string | null) => void;
+  setNetSuiteStatus: (netSuiteStatus: boolean) => void;
+  setAiStatus: (aiStatus: boolean) => void;
+  netsuiteAccountId: string;
+  netsuiteClientId: string;
+  setNetsuiteAccountId: (netsuiteAccountId: string) => void;
+  setNetsuiteClientId: (netsuiteClientId: string) => void;
 }
 
 interface Modelname {
@@ -22,7 +28,7 @@ interface Modelname {
   displayName: string;
 }
 
-const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelList, setModelList, apiProvider, setApiProvider, apiKey, setApiKey, selectedModel, setSelectedModel, inUseModelName, setInUseModelName }) => {
+const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelList, setModelList, apiProvider, setApiProvider, apiKey, setApiKey, selectedModel, setSelectedModel, inUseModelName, setInUseModelName, setNetSuiteStatus, setAiStatus, netsuiteAccountId, netsuiteClientId, setNetsuiteAccountId, setNetsuiteClientId }) => {
 	const [activeTab, setActiveTab] = useState('netsuite');
 	// const [apiProvider, setApiProvider] = useState('openai')
 	// const [models, setModels] = useState<Modelname[]>([])
@@ -77,7 +83,13 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
 		const top = (window.screen.height - popupHeight) / 2;
 
 		const windowFeatures = `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`;
-		window.open(data,"popupWindow", windowFeatures);
+		const popupWindow = window.open(data,"popupWindow", windowFeatures);
+
+    window.addEventListener("message", (event) => {
+      console.log('Popup Origin: ',event.origin)
+      if (event.origin !== "http://localhost:8000") return; // security check
+      console.log("Popup Window Response: ",event.data)
+    })
 	}
 
   const fetchModels = async () => {
@@ -133,6 +145,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
     const response = await data.json()
     console.log(response)
     setInUseModelName(modelText)
+    setAiStatus(true)
   }
 
   return (
@@ -161,11 +174,11 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
             <div className={`${styles.configSection} ${isDarkMode ? styles.dark : ''}`}>
               <div className={styles.inputGroup}>
                 <label htmlFor="netsuite-account-id">NetSuite Account ID</label>
-                <input type="text" id="netsuite-account-id" />
+                <input type="text" value={netsuiteAccountId} onChange={(e) => setNetsuiteAccountId(e.target.value)} id="netsuite-account-id" />
               </div>
               <div className={styles.inputGroup}>
                 <label htmlFor="client-id">Client ID</label>
-                <input type="text" id="client-id" />
+                <input type="text" value={netsuiteClientId} onChange={(e) => setNetsuiteClientId(e.target.value)} id="client-id" />
               </div>
               <button className={styles.authButton} onClick={handleNetsuiteAuth}>Authenticate</button>
             </div>

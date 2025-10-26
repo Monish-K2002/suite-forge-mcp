@@ -8,6 +8,7 @@ Suite Forge MCP is a full-stack prototype that mixes a FastAPI backend with a Re
 - **Configuration Modal** – `client/src/components/ConfigModal.tsx` and `Navbar.tsx` expose UI placeholders for NetSuite credentials and AI provider selection.
 - **NetSuite Connector Stub** – `client/src/components/NetSuiteConnector.tsx` centralizes calls to a NetSuite-facing API for chat and data retrieval.
 - **FastAPI Service** – `server/app/main.py` stands up a CORS-enabled API and wires in the PKCE-based `NetSuiteAuthService` defined in `server/services/netsuite_auth.py`.
+- **Stateful AI Assistant** – `server/services/ai/ai.py` now manages human context, conversation memory, and NetSuite-delivered tool calling via `NetSuiteToolService`.
 
 ## Project Structure
 ```

@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './Chatbot.module.css';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { FiSend, FiMoon, FiSun, FiPlus, FiClock } from 'react-icons/fi';
 
 interface ChatbotProps {
-  onSendMessage: (message: string) => Promise<string>;
   toggleHistory: () => void;
   messages: { text: string; sender: 'user' | 'bot' }[];
   setMessages: (
@@ -16,7 +17,7 @@ interface ChatbotProps {
 
 import { useDarkMode } from '../contexts/DarkModeContext';
 
-const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, messages, setMessages }) => {
+const Chatbot: React.FC<ChatbotProps> = ({ toggleHistory, messages, setMessages }) => {
   const { isDarkMode } = useDarkMode();
   // const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -68,7 +69,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
     });
     const data = await response.json()
     console.log("Chat Response: ",data)
-    setMessages((prevMessages) => [...prevMessages, { text: data, sender: 'bot' }]);
+    setMessages((prevMessages) => [...prevMessages, { text: data.response, sender: 'bot' }]);
   };
 
   const handleAttachmentClick = () => {
@@ -84,7 +85,11 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
       <div ref={messageListRef} className={styles.messageList}>
         {messages.map((message, index) => (
           <div key={index} className={`${styles.message} ${styles[message.sender]}`}>
-            {message.text}
+            {message.sender === 'bot' ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+            ) : (
+              message.text
+            )}
           </div>
         ))}
       </div>

@@ -10,6 +10,7 @@ class NetSuiteAuthService:
     def __init__(self):
         # Store PKCE challenges in memory for now (you can swap to a session store)
         self.pkce_store = {}
+        self.config = {}
 
     # Generate PKCE challenge
     def generate_pkce(self):
@@ -26,25 +27,28 @@ class NetSuiteAuthService:
     # Generate OAuth 2.0 authorization URL
     def get_authorization_url(self, session_id, config):
         pkce = self.generate_pkce()
+        if not self.config:
+            self.config = config
+        # print('Config: ',self.config)
 
         # Store PKCE verifier in memory (or session)
         self.pkce_store[session_id] = {
             'verifier': pkce['code_verifier'],
-            'config': config,
+            'config': self.config,
             'timestamp': datetime.utcnow().isoformat()
         }
 
         params = {
             'response_type': 'code',
-            'client_id': config['client_id'],
-            'redirect_uri': config.get('redirect_uri', 'http://localhost:8000/callback'),
-            'scope': config.get('scope', 'mcp'),
+            'client_id': self.config['client_id'],
+            'redirect_uri': self.config.get('redirect_uri', 'http://localhost:8000/callback'),
+            'scope': self.config.get('scope', 'mcp'),
             'state': session_id,
             'code_challenge': pkce['code_challenge'],
             'code_challenge_method': pkce['code_challenge_method']
         }
 
-        auth_url = f"https://{config['account_id']}.app.netsuite.com/app/login/oauth2/authorize.nl?{urlencode(params)}"
+        auth_url = f"https://{self.config['account_id']}.app.netsuite.com/app/login/oauth2/authorize.nl?{urlencode(params)}"
         print('Generated auth URL with PKCE challenge stored')
         return auth_url
 
@@ -55,7 +59,7 @@ class NetSuiteAuthService:
             raise ValueError('PKCE challenge not found for this session. Retry the flow.')
 
         verifier = pkce_data['verifier']
-        config = pkce_data['config']
+        config = self.config #pkce_data['config']
 
         token_url = f"https://{config['account_id']}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token"
 
@@ -79,17 +83,17 @@ class NetSuiteAuthService:
         return response.json()
 
     # Refresh access token
-    def refresh_access_token(self, refresh_token, config):
-        token_url = f"https://{config['account_id']}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token"
+    def refresh_access_token(self):
+        token_url = f"https://{self.config['account_id']}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token"
 
         params = {
             'grant_type': 'refresh_token',
-            'refresh_token': refresh_token,
-            'client_id': config['client_id']
+            'refresh_token': self.config['refresh_token'],
+            'client_id': self.config['client_id']
         }
 
-        if 'client_secret' in config:
-            params['client_secret'] = config['client_secret']
+        if 'client_secret' in self.config:
+            params['client_secret'] = self.config['client_secret']
 
         response = requests.post(token_url, data=params, headers={'Content-Type': 'application/x-www-form-urlencoded'})
         response.raise_for_status()

@@ -196,6 +196,45 @@
     border-color: #444;
 }
 
-.dark .attachmentMenu li:hover {
-    background-color: #444;
+.bot h1,
+.bot h2,
+.bot h3 {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.bot ul,
+.bot ol {
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
+
+.bot li {
+  margin-bottom: 0.5em;
+}
+
+.bot p {
+  margin-bottom: 1em;
+}
+
+.bot pre {
+  background-color: #eee;
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto;
+}
+
+.darkMode .bot pre {
+  background-color: #444;
+}
+
+.bot code {
+  font-family: 'Courier New', Courier, monospace;
+  background-color: #eee;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.darkMode .bot code {
+  background-color: #555;
 }

@@ -8,27 +8,29 @@ interface NavbarProps {
   // netSuiteStatus: boolean;
   // aiStatus: boolean;
   onConfigClick: () => void;
+  netSuiteStatus: boolean;
+  aiStatus: boolean;
+  inUseModelName: string | null;
+  netsuiteAccountId: string;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ onConfigClick }) => {
+const Navbar: React.FC<NavbarProps> = ({ onConfigClick, netSuiteStatus, aiStatus, inUseModelName, netsuiteAccountId }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const [netSuiteStatus, setNetSuiteStatus] = useState(false);
-  const [aiStatus, setAiStatus] = useState(false);
-  const [modelName, setModelName] = useState('');
   
-  const fetchCache = () => {
-   fetch("http://localhost:8000/get-specific-cache?key=selected_model")
-   .then(response => response.json()) 
-   .then(data => {
-    setModelName(data);
-    setAiStatus(true);
-   }) 
+  
+  // const fetchCache = () => {
+  //  fetch("http://localhost:8000/get-specific-cache?key=selected_model")
+  //  .then(response => response.json()) 
+  //  .then(data => {
+  //   setModelName(data);
+  //   setAiStatus(true);
+  //  }) 
 
-  }
+  // }
 
-  useEffect(() => {
-    fetchCache();
-  }, []);
+  // useEffect(() => {
+  //   fetchCache();
+  // }, []);
 
   return (
     <nav className={styles.navbar}>
@@ -39,14 +41,14 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick }) => {
             <span className={`${styles.statusDot} ${netSuiteStatus ? styles.online : styles.offline}`}></span>
             NetSuite
           </div>
-          <div className={styles.placeholder}>ACC ID: 123456</div>
+          <div className={styles.placeholder}>ACC ID: {netsuiteAccountId}</div>
         </div>
         <div className={styles.statusIndicator}>
           <div className={styles.statusLabel}>
             <span className={`${styles.statusDot} ${aiStatus ? styles.online : styles.offline}`}></span>
-            AI
+            Agent
           </div>
-          <div className={styles.placeholder}>Agent: {modelName}</div>
+          <div className={styles.placeholder}>{inUseModelName}</div>
         </div>
         <button onClick={toggleDarkMode} className={styles.configButton}>
           {isDarkMode ? <FiSun /> : <FiMoon />}
