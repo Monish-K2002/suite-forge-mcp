@@ -15,7 +15,7 @@ app = FastAPI()
 auth_service = NetSuiteAuthService()
 cache = Cache()
 tool_service = NetSuiteToolService(cache)
-ai_service = AIService(cache=cache, tool_service=tool_service)
+ai_service = AIService(cache=cache)
 session_id = secrets.token_urlsafe(32)
 
 origins = [
@@ -67,6 +67,7 @@ async def auth(request: Request):
     config = {
         "client_id": body.get("client_id"),
         "account_id": body.get("account_id"),
+        "mcp_base_url": body.get("mcp_base_url"),
     }
     # print("Config: ",config)
     cache.cache_set("netsuite_config", config)
