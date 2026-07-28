@@ -1,59 +1,63 @@
+import logging
+from typing import List, Dict, Any, Optional
 from google import genai
 from langchain_google_genai import GoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
 
+logger = logging.getLogger(__name__)
 
-# Create a single client object
 class AIService:
     def __init__(self):
-        self.client = None
-        self.llm = None
-        self.api_key = None
-        self.api_provider = None
+        pass
     
-    def get_models(self, api_provider: str, api_key: str):
+    def get_models(self, api_provider: str, api_key: str) -> List[Dict[str, str]]:
+        if not api_key:
+            raise ValueError("API Key is required to fetch models")
+            
         if api_provider == "google":
-            self.api_key = api_key
-            self.api_provider = api_provider
-            self.client = genai.Client(api_key=api_key)
-            models = self.client.models.list()
-            llm_models = [
-                {
-                    "name": "",
-                    "displayName": "Select Model"
-                }
-            ]
+            try:
+                client = genai.Client(api_key=api_key)
+                models = client.models.list()
+                llm_models = [
+                    {
+                        "name": "",
+                        "displayName": "Select Model"
+                    }
+                ]
 
-            for m in models:
-                if (
-                    any(x in m.supported_actions for x in ["generateContent"]) and
-                    "gemini" in m.name.lower()
-                ):
-                    llm_models.append(
-                        {
-                            "name": m.name.replace("models/", ""),
-                            "displayName": m.display_name
-                        }
-                    )
+                for m in models:
+                    supported = getattr(m, 'supported_actions', []) or getattr(m, 'supported_generation_methods', [])
+                    if any(x in supported for x in ["generateContent"]) and "gemini" in m.name.lower():
+                        clean_name = m.name.replace("models/", "")
+                        display = getattr(m, 'display_name', clean_name) or clean_name
+                        llm_models.append({
+                            "name": clean_name,
+                            "displayName": display
+                        })
 
-            return llm_models
-        return {"error": "Invalid API Provider"}
+                return llm_models
+            except Exception as e:
+                logger.error(f"Error fetching Google models: {e}")
+                raise RuntimeError(f"Failed to fetch models from Google: {str(e)}")
+        
+        raise ValueError(f"Unsupported API Provider: '{api_provider}'")
 
-    def use_model(self, model_name: str):
-        if self.api_provider == "google":
-            self.llm = GoogleGenerativeAI(google_api_key=self.api_key,model=model_name)
-            return
-        return
+    def create_llm_instance(self, api_provider: str, api_key: str, model_name: str):
+        if not api_provider or not api_key or not model_name:
+            raise ValueError("Provider, API Key, and Model Name are required to initialize LLM")
+            
+        if api_provider == "google":
+            return GoogleGenerativeAI(google_api_key=api_key, model=model_name)
+            
+        raise ValueError(f"Unsupported API Provider: '{api_provider}'")
 
-    def chat(self, message: str):
-        print("Message: ",message)
-        if self.api_provider == "google":
-            response = self.llm.invoke(message)
-            print("LLM Response: ",response)
-            return response
-
-    def get_api_details(self):
-        return {
-            "api_key": self.api_key,
-            "api_provider": self.api_provider
-        }
+    def chat(self, message: str, api_provider: str, api_key: str, model_name: str) -> str:
+        if not message or not message.strip():
+            return "Please provide a non-empty message."
+            
+        try:
+            llm = self.create_llm_instance(api_provider, api_key, model_name)
+            response = llm.invoke(message)
+            return str(response)
+        except Exception as e:
+            logger.error(f"Error in chat service: {e}")
+            return f"AI Service Error: {str(e)}"

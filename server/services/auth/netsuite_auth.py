@@ -2,14 +2,30 @@ import os
 import base64
 import hashlib
 import secrets
+import logging
 import requests
 from urllib.parse import urlencode
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 class NetSuiteAuthService:
     def __init__(self):
-        # Store PKCE challenges in memory for now (you can swap to a session store)
+        # PKCE challenges in-memory store mapping session_id -> metadata
         self.pkce_store = {}
+
+    def _cleanup_expired_challenges(self, ttl_minutes: int = 15):
+        """Remove stored PKCE challenges older than TTL."""
+        now = datetime.now(timezone.utc)
+        expired_keys = []
+        for session_id, data in self.pkce_store.items():
+            ts = data.get('timestamp')
+            if isinstance(ts, str):
+                ts = datetime.fromisoformat(ts)
+            if ts and (now - ts > timedelta(minutes=ttl_minutes)):
+                expired_keys.append(session_id)
+        for key in expired_keys:
+            del self.pkce_store[key]
 
     # Generate PKCE challenge
     def generate_pkce(self):
@@ -25,13 +41,13 @@ class NetSuiteAuthService:
 
     # Generate OAuth 2.0 authorization URL
     def get_authorization_url(self, session_id, config):
+        self._cleanup_expired_challenges()
         pkce = self.generate_pkce()
-
-        # Store PKCE verifier in memory (or session)
+        
         self.pkce_store[session_id] = {
             'verifier': pkce['code_verifier'],
             'config': config,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc)
         }
 
         params = {
@@ -45,14 +61,15 @@ class NetSuiteAuthService:
         }
 
         auth_url = f"https://{config['account_id']}.app.netsuite.com/app/login/oauth2/authorize.nl?{urlencode(params)}"
-        print('Generated auth URL with PKCE challenge stored')
+        logger.info(f"Generated NetSuite authorization URL for session {session_id}")
         return auth_url
 
     # Exchange authorization code for tokens
-    def exchange_code_for_tokens(self, code, session_id):
+    def exchange_code_for_tokens(self, code: str, session_id: str):
+        self._cleanup_expired_challenges()
         pkce_data = self.pkce_store.get(session_id)
         if not pkce_data:
-            raise ValueError('PKCE challenge not found for this session. Retry the flow.')
+            raise ValueError('PKCE challenge not found or expired for this session. Please restart authorization.')
 
         verifier = pkce_data['verifier']
         config = pkce_data['config']
@@ -67,19 +84,22 @@ class NetSuiteAuthService:
             'code_verifier': verifier
         }
 
-        if 'client_secret' in config:
+        if 'client_secret' in config and config['client_secret']:
             params['client_secret'] = config['client_secret']
 
         response = requests.post(token_url, data=params, headers={'Content-Type': 'application/x-www-form-urlencoded'})
-        response.raise_for_status()
-
-        # Clean up PKCE data
+        
+        # Clean up PKCE data after attempt
         del self.pkce_store[session_id]
+
+        if not response.ok:
+            logger.error(f"NetSuite token exchange failed: {response.text}")
+            response.raise_for_status()
 
         return response.json()
 
     # Refresh access token
-    def refresh_access_token(self, refresh_token, config):
+    def refresh_access_token(self, refresh_token: str, config: dict):
         token_url = f"https://{config['account_id']}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token"
 
         params = {
@@ -88,10 +108,13 @@ class NetSuiteAuthService:
             'client_id': config['client_id']
         }
 
-        if 'client_secret' in config:
+        if 'client_secret' in config and config['client_secret']:
             params['client_secret'] = config['client_secret']
 
         response = requests.post(token_url, data=params, headers={'Content-Type': 'application/x-www-form-urlencoded'})
-        response.raise_for_status()
+        if not response.ok:
+            logger.error(f"NetSuite token refresh failed: {response.text}")
+            response.raise_for_status()
 
         return response.json()
+

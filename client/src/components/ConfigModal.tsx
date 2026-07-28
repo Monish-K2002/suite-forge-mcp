@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import styles from './ConfigModal.module.css';
+import NetSuiteConnector from './NetSuiteConnector';
 
 interface ConfigModalProps {
   onClose: () => void;
@@ -22,118 +23,113 @@ interface Modelname {
   displayName: string;
 }
 
-const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelList, setModelList, apiProvider, setApiProvider, apiKey, setApiKey, selectedModel, setSelectedModel, inUseModelName, setInUseModelName }) => {
-	const [activeTab, setActiveTab] = useState('netsuite');
-	// const [apiProvider, setApiProvider] = useState('openai')
-	// const [models, setModels] = useState<Modelname[]>([])
+const connector = new NetSuiteConnector();
 
-	const getCacheConfig = () => {
-		fetch("http://localhost:8000/get-cache")
-			.then(response => response.json())
-			.then(data => {
-				setApiProvider(data.api_provider)
-				setApiKey(data.api_key)
-				setSelectedModel(data.selected_model)
-			})
-	}
+const ConfigModal: React.FC<ConfigModalProps> = ({ 
+  onClose, 
+  isDarkMode, 
+  modelList, 
+  setModelList, 
+  apiProvider, 
+  setApiProvider, 
+  apiKey, 
+  setApiKey, 
+  selectedModel, 
+  setSelectedModel, 
+  inUseModelName, 
+  setInUseModelName 
+}) => {
+  const [activeTab, setActiveTab] = useState('netsuite');
+  const [accountId, setAccountId] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [loading, setLoading] = useState(false);
 
-	useEffect(() => {
-		getCacheConfig()
-	}, [])
-
-	const handleProviderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-		const provider = event.target.value;
-		setApiProvider(provider);
-		setModelList([]);
-		setSelectedModel('')
-		setInUseModelName(null)
-		setApiKey('')
-	};
-
-	const handleNetsuiteAuth = async () => {
-		const clientIdInput = document.getElementById("client-id");
-		const clientId = clientIdInput instanceof HTMLInputElement ? clientIdInput.value : '';
-
-		const accountIdInput = document.getElementById("netsuite-account-id");
-		const accountId = accountIdInput instanceof HTMLInputElement ? accountIdInput.value : '';
-		const response = await fetch("http://localhost:8000/auth", {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			client_id: clientId,
-			account_id: accountId,
-		}),
-		});
-		const data = await response.json()
-
-		const popupWidth = window.screen.width * 0.8; // 80% of screen width
-		const popupHeight = window.screen.height * 0.8; // 80% of screen height
-
-		// 2. Calculate the center position of the screen
-		// window.screen.width/height gets the total screen dimensions
-		const left = (window.screen.width - popupWidth) / 2;
-		const top = (window.screen.height - popupHeight) / 2;
-
-		const windowFeatures = `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`;
-		window.open(data,"popupWindow", windowFeatures);
-	}
-
-  const fetchModels = async () => {
-    if(!apiProvider) {
-      alert("Please select an API provider")
-      return
+  const getCacheConfig = async () => {
+    try {
+      const config = await connector.getConfig();
+      if (config.api_provider) setApiProvider(config.api_provider);
+      if (config.selected_model) setSelectedModel(config.selected_model);
+      if (config.netsuite_account_id) setAccountId(config.netsuite_account_id);
+    } catch (err) {
+      console.error("Failed to load initial configuration:", err);
     }
-    if(!apiKey) {
-      alert("Please enter an API key")
-      return
-    }
-    const params = new URLSearchParams({
-      api_provider: apiProvider,
-      api_key: apiKey,
-    })
+  };
 
-    const response = await fetch("http://localhost:8000/models?" + params, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    const data = await response.json()
-    if(data?.error) {
-      alert(data.error)
-      return
-    }
-    setModelList(data)
-  }
+  useEffect(() => {
+    getCacheConfig();
+  }, []);
 
-  const useModel = async() => {
-    const modelName = document.getElementById("model-select")
-    const model = modelName instanceof HTMLSelectElement ? modelName.value : ''
-    const modelText = modelName instanceof HTMLSelectElement ? modelName.options[modelName.selectedIndex].text : ''
+  const handleProviderChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const provider = event.target.value;
+    setApiProvider(provider);
+    setModelList([]);
+    setSelectedModel('');
+    setInUseModelName(null);
+    setApiKey('');
+  };
 
-    if(!model) {
-      alert("Please select a model")
-      return
-    }
-    const data = await fetch("http://localhost:8000/use-model", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model_name: model,
-      }),
-    });
-    if (!data.ok) {
-      alert("Failed to set the model in use");
+  const handleNetsuiteAuth = async () => {
+    if (!accountId.trim() || !clientId.trim()) {
+      alert("Please enter both NetSuite Account ID and Client ID.");
       return;
     }
-    const response = await data.json()
-    console.log(response)
-    setInUseModelName(modelText)
-  }
+
+    try {
+      setLoading(true);
+      const res = await connector.authenticateNetSuite(accountId, clientId);
+      const popupWidth = window.screen.width * 0.8;
+      const popupHeight = window.screen.height * 0.8;
+      const left = (window.screen.width - popupWidth) / 2;
+      const top = (window.screen.height - popupHeight) / 2;
+      const windowFeatures = `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`;
+      window.open(res.auth_url, "popupWindow", windowFeatures);
+    } catch (err: any) {
+      alert(`Authentication failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchModels = async () => {
+    if (!apiProvider) {
+      alert("Please select an API provider");
+      return;
+    }
+    if (!apiKey) {
+      alert("Please enter an API key");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const models = await connector.fetchModels(apiProvider, apiKey);
+      setModelList(models);
+    } catch (err: any) {
+      alert(`Error fetching models: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const useModel = async () => {
+    if (!selectedModel) {
+      alert("Please select a model");
+      return;
+    }
+
+    const selectedObj = modelList.find(m => m.name === selectedModel);
+    const displayName = selectedObj ? selectedObj.displayName : selectedModel;
+
+    try {
+      setLoading(true);
+      await connector.useModel(selectedModel, apiProvider, apiKey);
+      setInUseModelName(displayName);
+    } catch (err: any) {
+      alert(`Failed to set model: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className={styles.modalOverlay}>
@@ -161,13 +157,31 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
             <div className={`${styles.configSection} ${isDarkMode ? styles.dark : ''}`}>
               <div className={styles.inputGroup}>
                 <label htmlFor="netsuite-account-id">NetSuite Account ID</label>
-                <input type="text" id="netsuite-account-id" />
+                <input 
+                  type="text" 
+                  id="netsuite-account-id" 
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  placeholder="e.g. 1234567"
+                />
               </div>
               <div className={styles.inputGroup}>
                 <label htmlFor="client-id">Client ID</label>
-                <input type="text" id="client-id" />
+                <input 
+                  type="text" 
+                  id="client-id" 
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  placeholder="e.g. your_oauth_client_id"
+                />
               </div>
-              <button className={styles.authButton} onClick={handleNetsuiteAuth}>Authenticate</button>
+              <button 
+                className={styles.authButton} 
+                onClick={handleNetsuiteAuth}
+                disabled={loading}
+              >
+                {loading ? 'Connecting...' : 'Authenticate'}
+              </button>
             </div>
           )}
           {activeTab === 'ai' && (
@@ -188,7 +202,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
                   id="api-key" 
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  disabled={inUseModelName ? true : false}
+                  disabled={Boolean(inUseModelName)}
+                  placeholder="Enter provider API key"
                 />
               </div>
               <div className={styles.inputGroup}>
@@ -196,9 +211,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
                 <select 
                   id="model-select"
                   value={selectedModel}
-                  onChange={(e) => {
-                    setSelectedModel(e.target.value)
-                  }}
+                  onChange={(e) => setSelectedModel(e.target.value)}
                 >
                   {modelList.map((model) => (
                     <option key={model.name} value={model.name}>{model.displayName}</option>
@@ -209,8 +222,20 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
                 <p className={styles.modelStatus}>Currently "{inUseModelName}" is in use.</p>
               )}
               <div className={styles.buttonGroup}>
-                <button className={`${styles.authButton} ${inUseModelName ? styles.successButton : ''}`} onClick={useModel}>Use Model</button>
-                <button className={styles.authButton} onClick={fetchModels}>Fetch Models</button>
+                <button 
+                  className={`${styles.authButton} ${inUseModelName ? styles.successButton : ''}`} 
+                  onClick={useModel}
+                  disabled={loading}
+                >
+                  Use Model
+                </button>
+                <button 
+                  className={styles.authButton} 
+                  onClick={fetchModels}
+                  disabled={loading}
+                >
+                  {loading ? 'Fetching...' : 'Fetch Models'}
+                </button>
               </div>
             </div>
           )}
@@ -221,3 +246,4 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ onClose, isDarkMode, modelLis
 };
 
 export default ConfigModal;
+

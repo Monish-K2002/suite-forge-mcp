@@ -56,19 +56,13 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
     setMessages((prevMessages) => [...prevMessages, { text: userMessage, sender: 'user' }]);
     setInputValue('');
 
-    // const botResponse = await onSendMessage(userMessage);
-    const response = await fetch("http://localhost:8000/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: userMessage,
-      }),
-    });
-    const data = await response.json()
-    console.log("Chat Response: ",data)
-    setMessages((prevMessages) => [...prevMessages, { text: data, sender: 'bot' }]);
+    try {
+      const botResponse = await onSendMessage(userMessage);
+      setMessages((prevMessages) => [...prevMessages, { text: botResponse, sender: 'bot' }]);
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Failed to send message. Please check API configuration.';
+      setMessages((prevMessages) => [...prevMessages, { text: `Error: ${errorMsg}`, sender: 'bot' }]);
+    }
   };
 
   const handleAttachmentClick = () => {
