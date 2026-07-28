@@ -103,6 +103,15 @@ export class NetSuiteConnector {
     }
     return await response.json();
   }
+
+  async getToolsList(): Promise<any> {
+    const response = await fetch(`${this.apiEndpoint}/get-tools-list`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch tools list.");
+    }
+    const data = await response.json();
+    return data || [];
+  }
 }
 
-export default NetSuiteConnector;
+export default NetSuiteConnector;

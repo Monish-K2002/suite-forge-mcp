@@ -149,3 +149,12 @@ def get_config():
         "has_api_key": has_api_key
     }
 
+@app.get("/get-tools-list")
+def get_tools_list():
+    """Return the list of available tools for the client UI."""
+    token_config = cache.cache_get("netsuite_tokens")
+    config = cache.cache_get("netsuite_config")
+    account_id = config.get("account_id", "")
+    tools = auth_service.get_tools(token_config, account_id)
+    return {"tools": tools}
+

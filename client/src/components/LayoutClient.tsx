@@ -17,6 +17,11 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
   const [apiProvider, setApiProvider] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [inUseModelName, setInUseModelName] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleRefreshStatus = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
 
   return (
     <div className={`h-screen w-screen flex flex-col overflow-hidden transition-colors duration-300 ${
@@ -36,6 +41,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
       <div className="relative z-10 flex flex-col h-full w-full">
         <Navbar 
           onConfigClick={() => setShowConfigModal(true)} 
+          refreshTrigger={refreshTrigger}
         />
 
         <main className="flex-1 flex min-h-0 overflow-hidden relative">
@@ -57,6 +63,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
           setSelectedModel={setSelectedModel}
           inUseModelName={inUseModelName}
           setInUseModelName={setInUseModelName}
+          onConfigSaved={handleRefreshStatus}
         />
       )}
     </div>

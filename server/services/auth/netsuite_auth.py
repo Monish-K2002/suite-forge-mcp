@@ -1,3 +1,4 @@
+from functools import cache
 import os
 import base64
 import hashlib
@@ -117,4 +118,38 @@ class NetSuiteAuthService:
             response.raise_for_status()
 
         return response.json()
+
+    
+    def get_tools(self, config: dict, account_id: str) -> list:
+        """Return the list of available tools."""
+        # print(f"Config: {config}")
+        # print(f"Access Token: {config.get('access_token')}")
+        # print(f"Account ID: {account_id}")
+        if not config:
+            raise ValueError("NetSuite configuration not found in cache")
+        mcp_url = f"https://{account_id}.suitetalk.api.netsuite.com/services/mcp/v1/all"
+
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list"
+        }
+
+        response = requests.post(
+            mcp_url,
+            headers={
+                "Authorization": f"Bearer {config['access_token']}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            json=payload,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            result = data.get("result", [])
+            # print("Success:", result.get("tools", []))
+            return result.get("tools", [])
+        else:
+            print(f"Error {response.status_code}:", response.text)
+            return []
 

@@ -11,7 +11,10 @@ import {
   FiEyeOff, 
   FiLayers, 
   FiExternalLink,
-  FiRefreshCw
+  FiRefreshCw,
+  FiChevronDown, 
+  FiChevronRight, 
+  FiTool
 } from 'react-icons/fi';
 import NetSuiteConnector from './NetSuiteConnector';
 
@@ -33,6 +36,7 @@ interface ConfigModalProps {
   setSelectedModel: (selectedModel: string) => void;
   inUseModelName: string | null;
   setInUseModelName: (inUseModelName: string | null) => void;
+  onConfigSaved?: () => void;
 }
 
 const connector = new NetSuiteConnector();
@@ -49,14 +53,27 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   selectedModel, 
   setSelectedModel, 
   inUseModelName, 
-  setInUseModelName 
+  setInUseModelName,
+  onConfigSaved
 }) => {
-  const [activeTab, setActiveTab] = useState<'netsuite' | 'ai'>('netsuite');
+  const [activeTab, setActiveTab] = useState<'netsuite' | 'ai' | 'mcp'>('netsuite');
   const [accountId, setAccountId] = useState('');
   const [clientId, setClientId] = useState('');
   const [loading, setLoading] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [mcpTools, setMcpTools] = useState<any[]>([]);
+  const [showTools, setShowTools] = useState(true);
+
+  const notifyConfigUpdated = () => {
+    onConfigSaved?.();
+    window.dispatchEvent(new CustomEvent('suite_forge_config_updated'));
+  };
+
+  const handleClose = () => {
+    notifyConfigUpdated();
+    onClose();
+  };
 
   const getCacheConfig = async () => {
     try {
@@ -74,11 +91,25 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
 
   useEffect(() => {
     getCacheConfig();
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleClose();
     };
+
+    const handleWindowMessage = (e: MessageEvent) => {
+      if (e.data && (e.data.type === 'NETSUITE_AUTH_SUCCESS' || e.data === 'NETSUITE_AUTH_SUCCESS')) {
+        setFeedback({ type: 'success', message: 'NetSuite authentication successful!' });
+        getCacheConfig();
+        notifyConfigUpdated();
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('message', handleWindowMessage);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('message', handleWindowMessage);
+    };
   }, []);
 
   const handleProviderChange = (provider: string) => {
@@ -107,6 +138,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
       const windowFeatures = `width=${popupWidth},height=${popupHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`;
       window.open(res.auth_url, "popupWindow", windowFeatures);
       setFeedback({ type: 'success', message: 'NetSuite OAuth pop-up opened. Please authorize access in the window.' });
+      notifyConfigUpdated();
     } catch (err: any) {
       setFeedback({ type: 'error', message: `Authentication failed: ${err.message}` });
     } finally {
@@ -155,6 +187,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
       await connector.useModel(selectedModel, apiProvider, apiKey);
       setInUseModelName(displayName);
       setFeedback({ type: 'success', message: `Model "${displayName}" is now active!` });
+      notifyConfigUpdated();
     } catch (err: any) {
       setFeedback({ type: 'error', message: `Failed to set model: ${err.message}` });
     } finally {
@@ -181,7 +214,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
             </div>
           </div>
           <button 
-            onClick={onClose} 
+            onClick={handleClose} 
             className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
           >
             <FiX className="w-5 h-5" />
@@ -200,6 +233,17 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
           >
             <FiDatabase className="w-4 h-4" />
             NetSuite ERP
+          </button>
+          <button 
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all ${
+              activeTab === 'mcp' 
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
+                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+            onClick={() => { setActiveTab('mcp'); setFeedback(null); }}
+          >
+            <FiDatabase className="w-4 h-4" />
+            MCP List
           </button>
           <button 
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all ${
@@ -284,6 +328,114 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'mcp' && (
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="p-3.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
+                <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-100">
+                  MCP Tools
+                </p>
+                <p className="mt-1 text-xs text-indigo-700/80 dark:text-indigo-300/80">
+                  Browse the tools exposed by your connected MCP server.
+                </p>
+              </div>
+
+              {/* Fetch Button */}
+              <button
+                onClick={() =>
+                  connector.getToolsList().then((tools) => setMcpTools(tools.tools ?? []))
+                }
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
+              >
+                <FiCheckCircle className="w-4 h-4" />
+                Refresh Tool List
+              </button>
+
+              {/* Tool List */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/50">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/40">
+                      <FiTool className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                        Available Tools
+                      </h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Tools exposed by the connected MCP server
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="inline-flex items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
+                    {mcpTools.length}
+                  </span>
+                </div>
+
+                {/* Body */}
+                <div className="max-h-96 overflow-y-auto p-3">
+
+                  {mcpTools.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                        <FiTool className="h-6 w-6 text-slate-400" />
+                      </div>
+
+                      <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        No MCP Tools
+                      </h4>
+
+                      <p className="mt-1 max-w-xs text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                        Fetch the tool list to view the tools exposed by your MCP server.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+
+                      {mcpTools.map((tool) => (
+                        <div
+                          key={tool.name}
+                          className="group rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-3 transition-all duration-200 hover:border-indigo-300 hover:shadow-sm dark:hover:border-indigo-500"
+                        >
+                          <div className="flex items-start gap-3">
+
+                            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/30 group-hover:scale-105 transition-transform">
+                              <FiTool className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-100 break-all">
+                                  {tool.name}
+                                </h4>
+
+                                <span className="rounded-full bg-slate-200 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">
+                                  MCP
+                                </span>
+                              </div>
+
+                              <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400 line-clamp-2">
+                                {tool.description || "No description available."}
+                              </p>
+
+                            </div>
+
+                          </div>
+                        </div>
+                      ))}
+
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

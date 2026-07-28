@@ -6,11 +6,12 @@ import NetSuiteConnector from './NetSuiteConnector';
 
 interface NavbarProps {
   onConfigClick: () => void;
+  refreshTrigger?: number;
 }
 
 const connector = new NetSuiteConnector();
 
-const Navbar: React.FC<NavbarProps> = ({ onConfigClick }) => {
+const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const [netSuiteStatus, setNetSuiteStatus] = useState(false);
   const [accountId, setAccountId] = useState('');
@@ -51,7 +52,16 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick }) => {
 
   useEffect(() => {
     fetchStatus();
-  }, []);
+
+    const handleConfigUpdated = () => {
+      fetchStatus();
+    };
+
+    window.addEventListener('suite_forge_config_updated', handleConfigUpdated);
+    return () => {
+      window.removeEventListener('suite_forge_config_updated', handleConfigUpdated);
+    };
+  }, [refreshTrigger]);
 
   return (
     <nav className="h-16 px-4 md:px-6 flex items-center justify-between border-b backdrop-blur-xl z-30 transition-colors duration-200 bg-white/70 border-slate-200/80 dark:bg-slate-900/80 dark:border-slate-800/80 shadow-sm shrink-0">
