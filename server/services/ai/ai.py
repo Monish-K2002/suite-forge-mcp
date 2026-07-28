@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict, Any, Optional
 from google import genai
-from langchain_google_genai import GoogleGenerativeAI
+from langchain_google_genai import GoogleGenerativeAI, ChatGoogleGenerativeAI
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,8 @@ class AIService:
             raise ValueError("Provider, API Key, and Model Name are required to initialize LLM")
             
         if api_provider == "google":
-            return GoogleGenerativeAI(google_api_key=api_key, model=model_name)
+            print(f"Creating Google LLM with model: {model_name}")
+            return ChatGoogleGenerativeAI(api_key=api_key, model=model_name)
             
         raise ValueError(f"Unsupported API Provider: '{api_provider}'")
 
@@ -57,7 +58,9 @@ class AIService:
         try:
             llm = self.create_llm_instance(api_provider, api_key, model_name)
             response = llm.invoke(message)
-            return str(response)
+            response_text = response.content[0].get('text') if hasattr(response, 'content') and len(response.content) > 0 else str(response)
+            print(f"Response: {response_text}")
+            return response_text
         except Exception as e:
             logger.error(f"Error in chat service: {e}")
             return f"AI Service Error: {str(e)}"

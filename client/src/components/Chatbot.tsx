@@ -88,7 +88,7 @@ const FormattedMessage: React.FC<{ text: string }> = ({ text }) => {
   }
 
   if (lastIndex < text.length) {
-    parts.push({ type: 'text', content: text.substring(lastIndex) });
+    parts.push({ type: 'text', content: String(text).substring(lastIndex) });
   }
 
   return (
@@ -477,4 +477,4 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
   );
 };
 
-export default Chatbot;
+export default Chatbot;
