@@ -1,4 +1,3 @@
-from functools import cache
 import os
 import base64
 import hashlib
@@ -112,9 +111,6 @@ class NetSuiteAuthService:
             'Content-Type': 'application/x-www-form-urlencoded'
         }
 
-        # if 'client_secret' in config and config['client_secret']:
-        #     params['client_secret'] = config['client_secret']
-
         response = requests.post(token_url, data=params, headers=headers)
         if not response.ok:
             logger.error(f"NetSuite token refresh failed: {response.text}")
@@ -122,15 +118,14 @@ class NetSuiteAuthService:
 
         return response.json()
 
-    
     def get_tools(self, token_config: dict, config: dict) -> list:
-        """Return the list of available tools."""
-        # print(f"Config: {config}")
-        # print(f"Access Token: {config.get('access_token')}")
-        # print(f"Account ID: {account_id}")
+        """Return the list of available tools from NetSuite MCP API."""
+        if not config or not config.get("account_id"):
+            raise ValueError("NetSuite account_id configuration is required")
+        if not token_config or not token_config.get("access_token"):
+            raise ValueError("NetSuite access token not found")
+
         account_id = config.get("account_id", "")
-        if not token_config:
-            raise ValueError("NetSuite configuration not found in cache")
         mcp_url = f"https://{account_id}.suitetalk.api.netsuite.com/services/mcp/v1/all"
 
         payload = {
@@ -139,33 +134,40 @@ class NetSuiteAuthService:
             "method": "tools/list"
         }
 
-        print(f"token_config {token_config}")
+        logger.debug(f"Fetching NetSuite tools for account {account_id}")
 
-        response = requests.post(
-            mcp_url,
-            headers={
-                "Authorization": f"Bearer {token_config['access_token']}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-            json=payload,
-        )
-        if response.status_code == 200:
-            data = response.json()
-            result = data.get("result", [])
-            # print("Success:", result.get("tools", []))
-            return result.get("tools", [])
-        elif response.status_code == 401:
-            # Token expired, try to refresh
-            logger.warning("Token expired, attempting to refresh...")
-            refreshed = self.refresh_access_token(token_config['refresh_token'], config, token_config['access_token'])
-            if refreshed:
-                # Update the config with new tokens
-                token_config['access_token'] = refreshed['access_token']
-                token_config['refresh_token'] = refreshed.get('refresh_token', token_config['refresh_token'])
-                # Retry the request with the new token
-                return self.get_tools(config, account_id)
-        else:
-            print(f"Error {response.status_code}:", response.text)
-            return []
+        try:
+            response = requests.post(
+                mcp_url,
+                headers={
+                    "Authorization": f"Bearer {token_config['access_token']}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                json=payload,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                result = data.get("result", {})
+                return result.get("tools", [])
+            elif response.status_code == 401:
+                logger.warning("NetSuite token expired, attempting to refresh...")
+                if 'refresh_token' not in token_config:
+                    logger.error("No refresh token available to refresh access token.")
+                    return []
+                refreshed = self.refresh_access_token(token_config['refresh_token'], config, token_config['access_token'])
+                if refreshed and 'access_token' in refreshed:
+                    token_config['access_token'] = refreshed['access_token']
+                    if 'refresh_token' in refreshed:
+                        token_config['refresh_token'] = refreshed['refresh_token']
+                    # Retry the request with updated tokens
+                    return self.get_tools(token_config, config)
+                return []
+            else:
+                logger.error(f"NetSuite get_tools HTTP Error {response.status_code}: {response.text}")
+                return []
+        except Exception as e:
+            logger.error(f"Exception while getting tools from NetSuite: {e}")
+            raise
+
 

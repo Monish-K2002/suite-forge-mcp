@@ -8,14 +8,7 @@ const connector = new NetSuiteConnector();
 
 export default function App() {
   const [showHistory, setShowHistory] = useState(false);
-  const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>(() => {
-    try {
-      const saved = localStorage.getItem('suite_forge_messages');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
 
   const [savedSessions, setSavedSessions] = useState<HistoryItem[]>(() => {
     try {
@@ -26,16 +19,28 @@ export default function App() {
     }
   });
 
+  // Load chat messages from backend SQLite DB on startup
   useEffect(() => {
-    try {
-      localStorage.setItem('suite_forge_messages', JSON.stringify(messages));
-    } catch (e) {
-      console.error('Failed to save messages to localStorage', e);
-    }
-  }, [messages]);
+    const loadStoredMessages = async () => {
+      try {
+        const storedMsgs = await connector.getMessages('default');
+        if (storedMsgs && storedMsgs.length > 0) {
+          const formatted = storedMsgs.map((m) => ({
+            text: m.content,
+            sender: (m.sender === 'user' ? 'user' : 'bot') as 'user' | 'bot'
+          }));
+          setMessages(formatted);
+        }
+      } catch (err) {
+        console.error('Error fetching chat history from SQLite:', err);
+      }
+    };
+    loadStoredMessages();
+  }, []);
 
   const handleSendMessage = async (message: string): Promise<string> => {
-    const response = await connector.sendMessage(message);
+    const result = await connector.sendMessage(message);
+    const response = typeof result === 'string' ? result : result.response;
     
     // Save session title if history is empty
     if (messages.length === 0) {
@@ -55,15 +60,20 @@ export default function App() {
     setShowHistory((prev) => !prev);
   };
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
+    try {
+      await connector.clearMessages('default');
+    } catch (e) {
+      console.error('Failed to clear messages in SQLite DB', e);
+    }
     setMessages([]);
   };
 
   const handleSelectPrompt = (promptText: string) => {
-    // Send prompt via Chatbot interface
     setMessages((prev) => [...prev, { text: promptText, sender: 'user' }]);
     connector.sendMessage(promptText)
-      .then((botResponse) => {
+      .then((res) => {
+        const botResponse = typeof res === 'string' ? res : res.response;
         setMessages((prev) => [...prev, { text: botResponse, sender: 'bot' }]);
       })
       .catch((err: any) => {
@@ -72,8 +82,14 @@ export default function App() {
       });
   };
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
+    try {
+      await connector.clearMessages('default');
+    } catch (e) {
+      console.error('Failed to clear messages', e);
+    }
     setSavedSessions([]);
+    setMessages([]);
     localStorage.removeItem('suite_forge_sessions');
   };
 
@@ -98,4 +114,5 @@ export default function App() {
     </div>
   );
 }
+
 

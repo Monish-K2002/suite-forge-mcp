@@ -1,6 +1,6 @@
 import secrets
 import logging
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from services.auth.netsuite_auth import NetSuiteAuthService
 from services.ai.ai import AIService
-from services.cache.cache import Cache
+from services.db.database import DatabaseManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ app = FastAPI(title="Suite Forge MCP API")
 
 auth_service = NetSuiteAuthService()
 ai_service = AIService()
-cache = Cache()
+db = DatabaseManager()
 
 origins = [
     "http://localhost:5173",
@@ -35,6 +35,10 @@ app.add_middleware(
 class AuthRequest(BaseModel):
     client_id: str
     account_id: str
+    client_secret: Optional[str] = None
+
+class SelectAccountRequest(BaseModel):
+    account_id: str
 
 class FetchModelsRequest(BaseModel):
     api_provider: str
@@ -47,18 +51,28 @@ class UseModelRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = "default"
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "message": "Suite Forge MCP API Running"}
+    return {"status": "ok", "message": "Suite Forge MCP API Running with SQLite Backend"}
+
+# --- ACCOUNT MANAGEMENT ENDPOINTS ---
 
 @app.post("/auth")
 async def auth(body: AuthRequest):
     config = {
         "client_id": body.client_id,
         "account_id": body.account_id,
+        "client_secret": body.client_secret
     }
-    cache.cache_set("netsuite_config", config)
+    # Register or update account in SQLite and mark active
+    db.add_or_update_account(
+        account_id=body.account_id,
+        client_id=body.client_id,
+        client_secret=body.client_secret,
+        set_active=True
+    )
 
     session_id = secrets.token_urlsafe(32)
     auth_url = auth_service.get_authorization_url(session_id, config)
@@ -75,7 +89,16 @@ def callback(code: Optional[str] = None, state: Optional[str] = None, error: Opt
 
     try:
         tokens = auth_service.exchange_code_for_tokens(code, state)
-        cache.cache_set("netsuite_tokens", tokens)
+        active_acc = db.get_active_account()
+        if active_acc:
+            db.update_tokens(
+                account_id=active_acc["account_id"],
+                access_token=tokens.get("access_token"),
+                refresh_token=tokens.get("refresh_token")
+            )
+        else:
+            db.cache_set("netsuite_tokens", tokens)
+
         html_content = """
         <html>
             <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
@@ -95,6 +118,34 @@ def callback(code: Optional[str] = None, state: Optional[str] = None, error: Opt
         logger.error(f"Error during OAuth callback exchange: {e}")
         return HTMLResponse(content=f"<html><body><h2>Authentication Error</h2><p>{str(e)}</p></body></html>", status_code=500)
 
+@app.get("/accounts")
+def list_accounts():
+    """Return all configured NetSuite accounts for easy switching."""
+    accounts = db.list_accounts()
+    active_account = db.get_active_account()
+    return {
+        "accounts": accounts,
+        "active_account_id": active_account["account_id"] if active_account else None
+    }
+
+@app.post("/accounts/select")
+def select_account(body: SelectAccountRequest):
+    """Switch active NetSuite account."""
+    acc = db.set_active_account(body.account_id)
+    if not acc:
+        raise HTTPException(status_code=404, detail=f"Account '{body.account_id}' not found.")
+    return {"status": "success", "message": f"Active account switched to {body.account_id}", "account": acc}
+
+@app.delete("/accounts/{account_id}")
+def delete_account(account_id: str):
+    """Delete a NetSuite account configuration."""
+    deleted = db.delete_account(account_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Account '{account_id}' not found.")
+    return {"status": "success", "message": f"Account '{account_id}' deleted."}
+
+# --- MODEL & CONFIG ENDPOINTS ---
+
 @app.post("/models")
 def models(body: FetchModelsRequest):
     try:
@@ -110,20 +161,38 @@ def use_model(body: UseModelRequest):
     if not model_name:
         raise HTTPException(status_code=400, detail="Model name is required")
 
-    cache.cache_set("selected_model", model_name)
+    db.set_setting("selected_model", model_name)
     if body.api_provider:
-        cache.cache_set("api_provider", body.api_provider)
+        db.set_setting("api_provider", body.api_provider)
     if body.api_key:
-        cache.cache_set("api_key", body.api_key)
+        db.set_setting("api_key", body.api_key)
         
     return {"status": "success", "message": f"Active model set to {model_name}"}
+
+@app.get("/get-config")
+def get_config():
+    """Return sanitized non-sensitive configuration parameters for the client UI."""
+    selected_model = db.get_setting("selected_model", "")
+    api_provider = db.get_setting("api_provider", "")
+    active_account = db.get_active_account()
+    has_api_key = bool(db.get_setting("api_key"))
+    
+    return {
+        "selected_model": selected_model,
+        "api_provider": api_provider,
+        "netsuite_account_id": active_account["account_id"] if active_account else "",
+        "has_api_key": has_api_key
+    }
+
+# --- CHAT & MESSAGES ENDPOINTS ---
 
 @app.post("/chat")
 def chat(body: ChatRequest):
     message = body.message
-    selected_model = cache.cache_get("selected_model")
-    api_provider = cache.cache_get("api_provider")
-    api_key = cache.cache_get("api_key")
+    session_id = body.session_id or "default"
+    selected_model = db.get_setting("selected_model")
+    api_provider = db.get_setting("api_provider")
+    api_key = db.get_setting("api_key")
 
     if not selected_model or not api_provider or not api_key:
         raise HTTPException(
@@ -131,31 +200,75 @@ def chat(body: ChatRequest):
             detail="AI model is not configured. Please configure API Provider, API Key, and Model in settings."
         )
 
-    response = ai_service.chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model)
-    return {"response": response}
+    active_account = db.get_active_account()
+    account_id = active_account["account_id"] if active_account else None
 
-@app.get("/get-config")
-def get_config():
-    """Return sanitized non-sensitive configuration parameters for the client UI."""
-    selected_model = cache.cache_get("selected_model", "")
-    api_provider = cache.cache_get("api_provider", "")
-    netsuite_config = cache.cache_get("netsuite_config", {})
-    has_api_key = bool(cache.cache_get("api_key"))
-    
-    return {
-        "selected_model": selected_model,
-        "api_provider": api_provider,
-        "netsuite_account_id": netsuite_config.get("account_id", ""),
-        "has_api_key": has_api_key
-    }
+    # Save user message to SQLite DB
+    user_msg = db.save_message(
+        sender="user",
+        content=message,
+        model_used=selected_model,
+        account_id=account_id,
+        session_id=session_id
+    )
+
+    try:
+        response_text = ai_service.chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model)
+        
+        # Save AI response to SQLite DB
+        ai_msg = db.save_message(
+            sender="ai",
+            content=response_text,
+            model_used=selected_model,
+            account_id=account_id,
+            session_id=session_id
+        )
+
+        return {"response": response_text, "user_message": user_msg, "ai_message": ai_msg}
+    except Exception as e:
+        logger.error(f"Error handling /chat request: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate response: {str(e)}")
+
+@app.get("/messages")
+def get_messages(session_id: str = "default", limit: int = 100):
+    """Retrieve chat message history from SQLite database."""
+    messages = db.get_messages(session_id=session_id, limit=limit)
+    return {"messages": messages}
+
+@app.delete("/messages")
+def clear_messages(session_id: str = "default"):
+    """Clear message history for a session."""
+    db.clear_messages(session_id=session_id)
+    return {"status": "success", "message": "Message history cleared."}
 
 @app.get("/get-tools-list")
 def get_tools_list():
     """Return the list of available tools for the client UI."""
-    token_config = cache.cache_get("netsuite_tokens")
-    config = cache.cache_get("netsuite_config")
-    print(f"Config: {config}")
-    account_id = config.get("account_id", "")
-    tools = auth_service.get_tools(token_config, config)
-    return {"tools": tools}
+    active_account = db.get_active_account()
+    if not active_account or not active_account.get("access_token"):
+        return {"tools": []}
+
+    token_config = {
+        "access_token": active_account["access_token"],
+        "refresh_token": active_account.get("refresh_token")
+    }
+    config = {
+        "account_id": active_account["account_id"],
+        "client_id": active_account["client_id"]
+    }
+
+    try:
+        tools = auth_service.get_tools(token_config, config)
+        # Update tokens in database if refreshed
+        db.update_tokens(
+            account_id=active_account["account_id"],
+            access_token=token_config["access_token"],
+            refresh_token=token_config.get("refresh_token")
+        )
+        return {"tools": tools}
+    except Exception as e:
+        logger.error(f"Error fetching tools list: {e}")
+        return {"tools": []}
+
+
 
