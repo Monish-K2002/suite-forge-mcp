@@ -382,6 +382,36 @@ class DatabaseManager:
             conn.close()
         return deleted
 
+    def get_sessions(self) -> List[Dict[str, Any]]:
+        """List distinct chat sessions with title snippet, message count, and last timestamp."""
+        with self._lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 
+                    session_id,
+                    content as title,
+                    MAX(timestamp) as last_updated,
+                    COUNT(*) as message_count
+                FROM messages
+                WHERE sender = 'user'
+                GROUP BY session_id
+                ORDER BY last_updated DESC
+            """)
+            rows = cursor.fetchall()
+            conn.close()
+
+            return [
+                {
+                    "id": row["session_id"],
+                    "title": row["title"][:40] + ("..." if len(row["title"]) > 40 else ""),
+                    "timestamp": str(row["last_updated"]),
+                    "messageCount": row["message_count"]
+                }
+                for row in rows
+            ]
+
+
     # --- SETTINGS & BACKWARD COMPATIBLE CACHE INTERFACE ---
 
     def set_setting(self, key: str, value: Any):

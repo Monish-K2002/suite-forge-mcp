@@ -229,11 +229,18 @@ def chat(body: ChatRequest):
         logger.error(f"Error handling /chat request: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate response: {str(e)}")
 
+@app.get("/sessions")
+def get_sessions():
+    """Retrieve list of active chat sessions from SQLite database."""
+    sessions = db.get_sessions()
+    return {"sessions": sessions}
+
 @app.get("/messages")
 def get_messages(session_id: str = "default", limit: int = 100):
     """Retrieve chat message history from SQLite database."""
     messages = db.get_messages(session_id=session_id, limit=limit)
     return {"messages": messages}
+
 
 @app.delete("/messages")
 def clear_messages(session_id: str = "default"):

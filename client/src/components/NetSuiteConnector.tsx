@@ -117,6 +117,18 @@ export class NetSuiteConnector {
     return await response.json();
   }
 
+  async getSessions(): Promise<any[]> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/sessions`);
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.sessions || [];
+    } catch (e) {
+      console.error("Failed to fetch sessions from SQLite DB", e);
+      return [];
+    }
+  }
+
   async getMessages(sessionId: string = 'default'): Promise<ChatMessageItem[]> {
     try {
       const response = await fetch(`${this.apiEndpoint}/messages?session_id=${encodeURIComponent(sessionId)}`);

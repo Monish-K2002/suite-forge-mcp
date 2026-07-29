@@ -8,50 +8,50 @@ const connector = new NetSuiteConnector();
 
 export default function App() {
   const [showHistory, setShowHistory] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState('default');
   const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
+  const [savedSessions, setSavedSessions] = useState<HistoryItem[]>([]);
 
-  const [savedSessions, setSavedSessions] = useState<HistoryItem[]>(() => {
+  const loadSessions = async () => {
     try {
-      const saved = localStorage.getItem('suite_forge_sessions');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  // Load chat messages from backend SQLite DB on startup
-  useEffect(() => {
-    const loadStoredMessages = async () => {
-      try {
-        const storedMsgs = await connector.getMessages('default');
-        if (storedMsgs && storedMsgs.length > 0) {
-          const formatted = storedMsgs.map((m) => ({
-            text: m.content,
-            sender: (m.sender === 'user' ? 'user' : 'bot') as 'user' | 'bot'
-          }));
-          setMessages(formatted);
-        }
-      } catch (err) {
-        console.error('Error fetching chat history from SQLite:', err);
+      const dbSessions = await connector.getSessions();
+      if (dbSessions && dbSessions.length > 0) {
+        setSavedSessions(dbSessions);
       }
-    };
-    loadStoredMessages();
-  }, []);
+    } catch (e) {
+      console.error('Failed to load sessions from SQLite DB', e);
+    }
+  };
+
+  const loadStoredMessages = async (sessionId: string) => {
+    try {
+      const storedMsgs = await connector.getMessages(sessionId);
+      if (storedMsgs) {
+        const formatted = storedMsgs.map((m) => ({
+          text: m.content,
+          sender: (m.sender === 'user' ? 'user' : 'bot') as 'user' | 'bot'
+        }));
+        setMessages(formatted);
+      } else {
+        setMessages([]);
+      }
+    } catch (err) {
+      console.error('Error fetching chat history from SQLite:', err);
+    }
+  };
+
+  // Load chat messages and sessions from backend SQLite DB on startup
+  useEffect(() => {
+    loadSessions();
+    loadStoredMessages(activeSessionId);
+  }, [activeSessionId]);
 
   const handleSendMessage = async (message: string): Promise<string> => {
-    const result = await connector.sendMessage(message);
+    const result = await connector.sendMessage(message, activeSessionId);
     const response = typeof result === 'string' ? result : result.response;
     
-    // Save session title if history is empty
-    if (messages.length === 0) {
-      const newSession: HistoryItem = {
-        id: Date.now().toString(),
-        title: message.length > 30 ? `${message.substring(0, 30)}...` : message,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        messageCount: 2
-      };
-      setSavedSessions((prev) => [newSession, ...prev]);
-    }
+    // Refresh sessions list after message save
+    loadSessions();
     
     return response;
   };
@@ -60,21 +60,24 @@ export default function App() {
     setShowHistory((prev) => !prev);
   };
 
-  const handleNewChat = async () => {
-    try {
-      await connector.clearMessages('default');
-    } catch (e) {
-      console.error('Failed to clear messages in SQLite DB', e);
-    }
+  const handleNewChat = () => {
+    const newSessionId = `session_${Date.now()}`;
+    setActiveSessionId(newSessionId);
     setMessages([]);
+  };
+
+  const handleSelectSession = (sessionId: string) => {
+    setActiveSessionId(sessionId);
+    loadStoredMessages(sessionId);
   };
 
   const handleSelectPrompt = (promptText: string) => {
     setMessages((prev) => [...prev, { text: promptText, sender: 'user' }]);
-    connector.sendMessage(promptText)
+    connector.sendMessage(promptText, activeSessionId)
       .then((res) => {
         const botResponse = typeof res === 'string' ? res : res.response;
         setMessages((prev) => [...prev, { text: botResponse, sender: 'bot' }]);
+        loadSessions();
       })
       .catch((err: any) => {
         const errorMsg = err?.message || 'Failed to send message.';
@@ -84,13 +87,12 @@ export default function App() {
 
   const handleClearHistory = async () => {
     try {
-      await connector.clearMessages('default');
+      await connector.clearMessages(activeSessionId);
     } catch (e) {
       console.error('Failed to clear messages', e);
     }
-    setSavedSessions([]);
     setMessages([]);
-    localStorage.removeItem('suite_forge_sessions');
+    loadSessions();
   };
 
   return (
@@ -100,6 +102,8 @@ export default function App() {
         onClose={() => setShowHistory(false)}
         onNewChat={handleNewChat}
         onSelectPrompt={handleSelectPrompt}
+        onSelectSession={handleSelectSession}
+        activeSessionId={activeSessionId}
         savedSessions={savedSessions}
         onClearHistory={handleClearHistory}
       />
@@ -114,5 +118,6 @@ export default function App() {
     </div>
   );
 }
+
 
 
