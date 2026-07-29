@@ -7,3 +7,6 @@ server/.venv
 server/app/__pycache__/
 **/__pycache__/
 server/cache.data
+**.db
+**.sqlite
+ELECTRON_MIGRATION_GUIDE.md
