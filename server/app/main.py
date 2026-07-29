@@ -154,7 +154,8 @@ def get_tools_list():
     """Return the list of available tools for the client UI."""
     token_config = cache.cache_get("netsuite_tokens")
     config = cache.cache_get("netsuite_config")
+    print(f"Config: {config}")
     account_id = config.get("account_id", "")
-    tools = auth_service.get_tools(token_config, account_id)
+    tools = auth_service.get_tools(token_config, config)
     return {"tools": tools}
 

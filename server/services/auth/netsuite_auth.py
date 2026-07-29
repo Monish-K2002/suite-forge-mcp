@@ -100,19 +100,22 @@ class NetSuiteAuthService:
         return response.json()
 
     # Refresh access token
-    def refresh_access_token(self, refresh_token: str, config: dict):
+    def refresh_access_token(self, refresh_token: str, config: dict, access_token: str):
         token_url = f"https://{config['account_id']}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token"
 
         params = {
             'grant_type': 'refresh_token',
             'refresh_token': refresh_token,
-            'client_id': config['client_id']
+        }
+        headers = {
+            'Authorization': f"Bearer {access_token}",
+            'Content-Type': 'application/x-www-form-urlencoded'
         }
 
-        if 'client_secret' in config and config['client_secret']:
-            params['client_secret'] = config['client_secret']
+        # if 'client_secret' in config and config['client_secret']:
+        #     params['client_secret'] = config['client_secret']
 
-        response = requests.post(token_url, data=params, headers={'Content-Type': 'application/x-www-form-urlencoded'})
+        response = requests.post(token_url, data=params, headers=headers)
         if not response.ok:
             logger.error(f"NetSuite token refresh failed: {response.text}")
             response.raise_for_status()
@@ -120,12 +123,13 @@ class NetSuiteAuthService:
         return response.json()
 
     
-    def get_tools(self, config: dict, account_id: str) -> list:
+    def get_tools(self, token_config: dict, config: dict) -> list:
         """Return the list of available tools."""
         # print(f"Config: {config}")
         # print(f"Access Token: {config.get('access_token')}")
         # print(f"Account ID: {account_id}")
-        if not config:
+        account_id = config.get("account_id", "")
+        if not token_config:
             raise ValueError("NetSuite configuration not found in cache")
         mcp_url = f"https://{account_id}.suitetalk.api.netsuite.com/services/mcp/v1/all"
 
@@ -135,10 +139,12 @@ class NetSuiteAuthService:
             "method": "tools/list"
         }
 
+        print(f"token_config {token_config}")
+
         response = requests.post(
             mcp_url,
             headers={
-                "Authorization": f"Bearer {config['access_token']}",
+                "Authorization": f"Bearer {token_config['access_token']}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
@@ -149,6 +155,16 @@ class NetSuiteAuthService:
             result = data.get("result", [])
             # print("Success:", result.get("tools", []))
             return result.get("tools", [])
+        elif response.status_code == 401:
+            # Token expired, try to refresh
+            logger.warning("Token expired, attempting to refresh...")
+            refreshed = self.refresh_access_token(token_config['refresh_token'], config, token_config['access_token'])
+            if refreshed:
+                # Update the config with new tokens
+                token_config['access_token'] = refreshed['access_token']
+                token_config['refresh_token'] = refreshed.get('refresh_token', token_config['refresh_token'])
+                # Retry the request with the new token
+                return self.get_tools(config, account_id)
         else:
             print(f"Error {response.status_code}:", response.text)
             return []

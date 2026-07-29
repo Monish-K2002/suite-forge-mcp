@@ -653,7 +653,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                       }`}
                     >
                       <div className="font-semibold text-xs">{prov.label}</div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{prov.badge}</div>
+                      {/* <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{prov.badge}</div> */}
                     </button>
                   ))}
                 </div>
