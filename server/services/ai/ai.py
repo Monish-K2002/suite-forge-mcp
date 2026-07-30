@@ -3,10 +3,22 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from google import genai
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain.messages import SystemMessage
+
+try:
+    from langchain_mcp_adapters.client import MultiServerMCPClient
+except Exception:
+    MultiServerMCPClient = None
+
 from langchain.agents import create_agent
+
 from services.db.database import DatabaseManager
 logger = logging.getLogger(__name__)
+sys_message = SystemMessage(
+    """
+    You are a helpful NetSuite Assistant. You help users with their NetSuite tasks.
+    """
+)
 
 
 class BaseLLMProvider(ABC):
@@ -52,7 +64,7 @@ class GoogleLLMProvider(BaseLLMProvider):
 
     def create_llm_instance(self, api_key: str, model_name: str) -> Any:
         logger.info(f"Initializing Google Gemini LLM with model: {model_name}")
-        return ChatGoogleGenerativeAI(api_key=api_key, model=model_name)
+        return ChatGoogleGenerativeAI(api_key=api_key, model=model_name,include_thoughts=True)
 
 
 class AIService:
@@ -60,6 +72,7 @@ class AIService:
 
     def __init__(self):
         self.db = DatabaseManager()
+        self.tools: List[Any] = []
         self._providers: Dict[str, BaseLLMProvider] = {
             "google": GoogleLLMProvider()
         }
@@ -74,15 +87,17 @@ class AIService:
         return active_account["account_id"] if active_account else None
 
     async def init_tools(self):
+        if not MultiServerMCPClient:
+            self.tools = []
+            return
+
         active_account = self.db.get_active_account()
         if not active_account:
             self.tools = []
             return
         
         account_id = active_account.get("account_id", "")
-        # print('account_id',account_id)
         token = active_account.get("access_token", "")
-        # print('token',token)
         if not account_id:
             self.tools = []
             return
@@ -163,10 +178,11 @@ class AIService:
 
         try:
             llm = self.create_llm_instance(api_provider, api_key, model_name)
-            agent = create_agent(llm, tools=self.tools)
-            if hasattr(agent, 'astream'):
-                async for chunk in agent.astream(message):
-                    if hasattr(chunk, 'content'):
+            if getattr(self, 'tools', None) and create_agent:
+                agent = create_agent(model=llm, tools=self.tools)
+                async for event in agent.astream({"messages": [("user", message)]}, stream_mode="messages"):
+                    chunk, _ = event
+                    if hasattr(chunk, 'content') and chunk.content:
                         content = chunk.content
                         if isinstance(content, str):
                             yield content
@@ -178,28 +194,43 @@ class AIService:
                                 else:
                                     parts.append(str(item))
                             yield "".join(parts)
-                        else:
-                            yield str(content)
-                    else:
-                        yield str(chunk)
             else:
-                for chunk in llm.stream(message):
-                    if hasattr(chunk, 'content'):
-                        content = chunk.content
-                        if isinstance(content, str):
-                            yield content
-                        elif isinstance(content, list) and len(content) > 0:
-                            parts = []
-                            for item in content:
-                                if isinstance(item, dict):
-                                    parts.append(item.get('text', str(item)))
-                                else:
-                                    parts.append(str(item))
-                            yield "".join(parts)
+                if hasattr(llm, 'astream'):
+                    async for chunk in llm.astream(message):
+                        if hasattr(chunk, 'content'):
+                            content = chunk.content
+                            if isinstance(content, str):
+                                yield content
+                            elif isinstance(content, list) and len(content) > 0:
+                                parts = []
+                                for item in content:
+                                    if isinstance(item, dict):
+                                        parts.append(item.get('text', str(item)))
+                                    else:
+                                        parts.append(str(item))
+                                yield "".join(parts)
+                            else:
+                                yield str(content)
                         else:
-                            yield str(content)
-                    else:
-                        yield str(chunk)
+                            yield str(chunk)
+                else:
+                    for chunk in llm.stream(message):
+                        if hasattr(chunk, 'content'):
+                            content = chunk.content
+                            if isinstance(content, str):
+                                yield content
+                            elif isinstance(content, list) and len(content) > 0:
+                                parts = []
+                                for item in content:
+                                    if isinstance(item, dict):
+                                        parts.append(item.get('text', str(item)))
+                                    else:
+                                        parts.append(str(item))
+                                yield "".join(parts)
+                            else:
+                                yield str(content)
+                        else:
+                            yield str(chunk)
             logger.debug(f"AI streaming completed successfully for model {model_name}")
         except Exception as e:
             logger.error(f"Error in stream_chat service: {e}")

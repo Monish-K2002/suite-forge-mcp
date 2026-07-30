@@ -40,13 +40,12 @@ class TestAIService(unittest.TestCase):
             def get_models(self, api_key: str):
                 return []
             def create_llm_instance(self, api_key: str, model_name: str):
-                mock_llm = MagicMock(spec=[])
-                mock_llm.stream.return_value = [
-                    MagicMock(content="Hello "),
-                    MagicMock(content="streaming "),
-                    MagicMock(content="world!")
-                ]
-                return mock_llm
+                class DummyLLM:
+                    def stream(self, msg):
+                        yield MagicMock(content="Hello ")
+                        yield MagicMock(content="streaming ")
+                        yield MagicMock(content="world!")
+                return DummyLLM()
 
         async def collect_chunks():
             chunks = []
