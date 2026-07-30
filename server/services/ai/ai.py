@@ -21,6 +21,30 @@ sys_message = SystemMessage(
 )
 
 
+def extract_text_content(content: Any) -> str:
+    """Normalize LangChain provider content into displayable text."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict):
+                parts.append(str(item.get("text", item)))
+            else:
+                parts.append(str(item))
+        return "".join(parts)
+    return str(content)
+
+
+def extract_message_text(message: Any) -> str:
+    """Normalize provider message/chunk objects into text."""
+    if hasattr(message, "content"):
+        return extract_text_content(message.content)
+    return extract_text_content(message)
+
+
 class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers."""
     
@@ -145,20 +169,7 @@ class AIService:
         try:
             llm = self.create_llm_instance(api_provider, api_key, model_name)
             response = llm.invoke(message)
-            
-            # Normalize LangChain output
-            if hasattr(response, 'content'):
-                content = response.content
-                if isinstance(content, list) and len(content) > 0:
-                    first_part = content[0]
-                    if isinstance(first_part, dict):
-                        response_text = first_part.get('text', str(first_part))
-                    else:
-                        response_text = str(first_part)
-                else:
-                    response_text = str(content)
-            else:
-                response_text = str(response)
+            response_text = extract_message_text(response)
 
             logger.debug(f"AI response generated successfully for model {model_name}")
             return response_text
@@ -182,55 +193,20 @@ class AIService:
                 agent = create_agent(model=llm, tools=self.tools)
                 async for event in agent.astream({"messages": [("user", message)]}, stream_mode="messages"):
                     chunk, _ = event
-                    if hasattr(chunk, 'content') and chunk.content:
-                        content = chunk.content
-                        if isinstance(content, str):
-                            yield content
-                        elif isinstance(content, list) and len(content) > 0:
-                            parts = []
-                            for item in content:
-                                if isinstance(item, dict):
-                                    parts.append(item.get('text', str(item)))
-                                else:
-                                    parts.append(str(item))
-                            yield "".join(parts)
+                    text = extract_message_text(chunk)
+                    if text:
+                        yield text
             else:
                 if hasattr(llm, 'astream'):
                     async for chunk in llm.astream(message):
-                        if hasattr(chunk, 'content'):
-                            content = chunk.content
-                            if isinstance(content, str):
-                                yield content
-                            elif isinstance(content, list) and len(content) > 0:
-                                parts = []
-                                for item in content:
-                                    if isinstance(item, dict):
-                                        parts.append(item.get('text', str(item)))
-                                    else:
-                                        parts.append(str(item))
-                                yield "".join(parts)
-                            else:
-                                yield str(content)
-                        else:
-                            yield str(chunk)
+                        text = extract_message_text(chunk)
+                        if text:
+                            yield text
                 else:
                     for chunk in llm.stream(message):
-                        if hasattr(chunk, 'content'):
-                            content = chunk.content
-                            if isinstance(content, str):
-                                yield content
-                            elif isinstance(content, list) and len(content) > 0:
-                                parts = []
-                                for item in content:
-                                    if isinstance(item, dict):
-                                        parts.append(item.get('text', str(item)))
-                                    else:
-                                        parts.append(str(item))
-                                yield "".join(parts)
-                            else:
-                                yield str(content)
-                        else:
-                            yield str(chunk)
+                        text = extract_message_text(chunk)
+                        if text:
+                            yield text
             logger.debug(f"AI streaming completed successfully for model {model_name}")
         except Exception as e:
             logger.error(f"Error in stream_chat service: {e}")

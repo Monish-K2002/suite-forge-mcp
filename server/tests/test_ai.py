@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from services.ai.ai import AIService, GoogleLLMProvider, BaseLLMProvider
+from services.ai.ai import AIService, GoogleLLMProvider, BaseLLMProvider, extract_message_text
 
 class TestAIService(unittest.TestCase):
     def setUp(self):
@@ -32,6 +32,14 @@ class TestAIService(unittest.TestCase):
 
         res = self.ai_service.chat("test prompt", "dummy", "test-key", "dummy-model")
         self.assertEqual(res, "Hello from dummy")
+
+    def test_extract_message_text_from_provider_content_shapes(self):
+        self.assertEqual(extract_message_text(MagicMock(content="plain text")), "plain text")
+        self.assertEqual(
+            extract_message_text(MagicMock(content=[{"text": "Hello "}, {"text": "world"}])),
+            "Hello world"
+        )
+        self.assertEqual(extract_message_text({"event": "tool_call"}), "{'event': 'tool_call'}")
 
     def test_stream_chat(self):
         import asyncio

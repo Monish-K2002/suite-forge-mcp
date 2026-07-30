@@ -240,7 +240,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   };
 
   const filteredTools = mcpTools.filter((t) => {
-    const q = toolSearchQuery.toLowerCase().strip ? toolSearchQuery.toLowerCase().strip() : toolSearchQuery.toLowerCase();
+    const q = toolSearchQuery.toLowerCase().trim();
     const nameMatch = (t.name || '').toLowerCase().includes(q);
     const descMatch = (t.description || '').toLowerCase().includes(q);
     return nameMatch || descMatch;
