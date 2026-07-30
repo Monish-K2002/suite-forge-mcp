@@ -18,7 +18,7 @@ import {
 import { useDarkMode } from '../contexts/DarkModeContext';
 
 interface ChatbotProps {
-  onSendMessage: (message: string) => Promise<string>;
+  onSendMessage: (message: string, onChunk?: (chunk: string) => void) => Promise<string>;
   toggleHistory: () => void;
   messages: { text: string; sender: 'user' | 'bot' }[];
   setMessages: (
@@ -208,12 +208,46 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
     if (!customPrompt) setInputValue('');
     setIsThinking(true);
 
+    let hasReceivedChunk = false;
+
     try {
-      const botResponse = await onSendMessage(textToSend);
-      setMessages((prev) => [...prev, { text: botResponse, sender: 'bot' }]);
+      await onSendMessage(textToSend, (chunk: string) => {
+        if (!hasReceivedChunk) {
+          hasReceivedChunk = true;
+          setIsThinking(false);
+          setMessages((prev) => [...prev, { text: chunk, sender: 'bot' }]);
+        } else {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
+              updated[lastIdx] = {
+                ...updated[lastIdx],
+                text: updated[lastIdx].text + chunk
+              };
+            }
+            return updated;
+          });
+        }
+      });
     } catch (err: any) {
       const errorMsg = err?.message || 'Failed to communicate with NetSuite MCP. Please check API settings.';
-      setMessages((prev) => [...prev, { text: `⚠️ **Error**: ${errorMsg}`, sender: 'bot' }]);
+      setIsThinking(false);
+      if (!hasReceivedChunk) {
+        setMessages((prev) => [...prev, { text: `⚠️ **Error**: ${errorMsg}`, sender: 'bot' }]);
+      } else {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
+            updated[lastIdx] = {
+              ...updated[lastIdx],
+              text: updated[lastIdx].text + `\n\n⚠️ **Error**: ${errorMsg}`
+            };
+          }
+          return updated;
+        });
+      }
     } finally {
       setIsThinking(false);
     }

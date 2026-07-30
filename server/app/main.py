@@ -1,8 +1,9 @@
 import secrets
 import logging
+import json
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Request, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -212,22 +213,36 @@ def chat(body: ChatRequest):
         session_id=session_id
     )
 
-    try:
-        response_text = ai_service.chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model)
-        
-        # Save AI response to SQLite DB
-        ai_msg = db.save_message(
-            sender="ai",
-            content=response_text,
-            model_used=selected_model,
-            account_id=account_id,
-            session_id=session_id
-        )
+    async def event_generator():
+        full_response = ""
+        try:
+            async for token in ai_service.stream_chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model):
+                full_response += token
+                payload = json.dumps({"type": "token", "token": token})
+                yield f"data: {payload}\n\n"
 
-        return {"response": response_text, "user_message": user_msg, "ai_message": ai_msg}
-    except Exception as e:
-        logger.error(f"Error handling /chat request: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate response: {str(e)}")
+            # Save AI response to SQLite DB upon completion
+            ai_msg = db.save_message(
+                sender="ai",
+                content=full_response,
+                model_used=selected_model,
+                account_id=account_id,
+                session_id=session_id
+            )
+
+            done_payload = json.dumps({
+                "type": "done",
+                "response": full_response,
+                "user_message": user_msg,
+                "ai_message": ai_msg
+            })
+            yield f"data: {done_payload}\n\n"
+        except Exception as e:
+            logger.error(f"Error handling /chat streaming request: {e}")
+            err_payload = json.dumps({"type": "error", "error": str(e)})
+            yield f"data: {err_payload}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.get("/sessions")
 def get_sessions():

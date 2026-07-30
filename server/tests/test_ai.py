@@ -33,5 +33,30 @@ class TestAIService(unittest.TestCase):
         res = self.ai_service.chat("test prompt", "dummy", "test-key", "dummy-model")
         self.assertEqual(res, "Hello from dummy")
 
+    def test_stream_chat(self):
+        import asyncio
+
+        class StreamingDummyProvider(BaseLLMProvider):
+            def get_models(self, api_key: str):
+                return []
+            def create_llm_instance(self, api_key: str, model_name: str):
+                mock_llm = MagicMock(spec=[])
+                mock_llm.stream.return_value = [
+                    MagicMock(content="Hello "),
+                    MagicMock(content="streaming "),
+                    MagicMock(content="world!")
+                ]
+                return mock_llm
+
+        async def collect_chunks():
+            chunks = []
+            async for chunk in self.ai_service.stream_chat("test prompt", "dummy_stream", "test-key", "dummy-model"):
+                chunks.append(chunk)
+            return "".join(chunks)
+
+        self.ai_service.register_provider("dummy_stream", StreamingDummyProvider())
+        result = asyncio.run(collect_chunks())
+        self.assertEqual(result, "Hello streaming world!")
+
 if __name__ == "__main__":
     unittest.main()

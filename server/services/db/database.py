@@ -343,7 +343,6 @@ class DatabaseManager:
                 "model_used": row["model_used"],
                 "timestamp": str(row["timestamp"])
             }
-
     def get_messages(self, session_id: str = "default", limit: int = 100) -> List[Dict[str, Any]]:
         """Retrieve stored chat history messages."""
         with self._lock:

@@ -46,8 +46,8 @@ export default function App() {
     loadStoredMessages(activeSessionId);
   }, [activeSessionId]);
 
-  const handleSendMessage = async (message: string): Promise<string> => {
-    const result = await connector.sendMessage(message, activeSessionId);
+  const handleSendMessage = async (message: string, onChunk?: (chunk: string) => void): Promise<string> => {
+    const result = await connector.sendMessage(message, activeSessionId, onChunk);
     const response = typeof result === 'string' ? result : result.response;
     
     // Refresh sessions list after message save
@@ -73,15 +73,46 @@ export default function App() {
 
   const handleSelectPrompt = (promptText: string) => {
     setMessages((prev) => [...prev, { text: promptText, sender: 'user' }]);
-    connector.sendMessage(promptText, activeSessionId)
-      .then((res) => {
-        const botResponse = typeof res === 'string' ? res : res.response;
-        setMessages((prev) => [...prev, { text: botResponse, sender: 'bot' }]);
+    let botMsgAdded = false;
+
+    connector.sendMessage(promptText, activeSessionId, (chunk: string) => {
+      if (!botMsgAdded) {
+        botMsgAdded = true;
+        setMessages((prev) => [...prev, { text: chunk, sender: 'bot' }]);
+      } else {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
+            updated[lastIdx] = {
+              ...updated[lastIdx],
+              text: updated[lastIdx].text + chunk
+            };
+          }
+          return updated;
+        });
+      }
+    })
+      .then(() => {
         loadSessions();
       })
       .catch((err: any) => {
         const errorMsg = err?.message || 'Failed to send message.';
-        setMessages((prev) => [...prev, { text: `⚠️ **Error**: ${errorMsg}`, sender: 'bot' }]);
+        if (!botMsgAdded) {
+          setMessages((prev) => [...prev, { text: `⚠️ **Error**: ${errorMsg}`, sender: 'bot' }]);
+        } else {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
+              updated[lastIdx] = {
+                ...updated[lastIdx],
+                text: updated[lastIdx].text + `\n\n⚠️ **Error**: ${errorMsg}`
+              };
+            }
+            return updated;
+          });
+        }
       });
   };
 

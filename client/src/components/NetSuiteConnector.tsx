@@ -31,7 +31,11 @@ export class NetSuiteConnector {
     this.apiEndpoint = (apiEndpoint || import.meta.env.VITE_NETSUITE_API_ENDPOINT || 'http://localhost:8000').replace(/\/+$/, '');
   }
 
-  async sendMessage(message: string, sessionId: string = 'default'): Promise<{ response: string; user_message?: any; ai_message?: any }> {
+  async sendMessage(
+    message: string, 
+    sessionId: string = 'default',
+    onChunk?: (chunk: string) => void
+  ): Promise<{ response: string; user_message?: any; ai_message?: any }> {
     try {
       const response = await fetch(`${this.apiEndpoint}/chat`, {
         method: "POST",
@@ -46,11 +50,82 @@ export class NetSuiteConnector {
         throw new Error(errData.detail || `HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+
+      if (contentType.includes("application/json")) {
+        const data = await response.json();
+        if (onChunk && data.response) {
+          onChunk(data.response);
+        }
+        return {
+          response: data.response || "No response received from AI service.",
+          user_message: data.user_message,
+          ai_message: data.ai_message
+        };
+      }
+
+      if (!response.body) {
+        throw new Error("Response body is empty.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = "";
+      let buffer = "";
+      let doneData: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
+            const jsonStr = trimmed.substring(6);
+            try {
+              const parsed = JSON.parse(jsonStr);
+              if (parsed.type === "token") {
+                fullResponse += parsed.token;
+                if (onChunk) onChunk(parsed.token);
+              } else if (parsed.type === "done") {
+                doneData = parsed;
+              } else if (parsed.type === "error") {
+                throw new Error(parsed.error);
+              }
+            } catch (e: any) {
+              if (e.message && !e.message.includes("JSON")) {
+                throw e;
+              }
+            }
+          }
+        }
+      }
+
+      if (buffer.trim().startsWith("data: ")) {
+        const jsonStr = buffer.trim().substring(6);
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.type === "token") {
+            fullResponse += parsed.token;
+            if (onChunk) onChunk(parsed.token);
+          } else if (parsed.type === "done") {
+            doneData = parsed;
+          } else if (parsed.type === "error") {
+            throw new Error(parsed.error);
+          }
+        } catch (e) {
+          // ignore incomplete trailing chunk
+        }
+      }
+
       return {
-        response: data.response || "No response received from AI service.",
-        user_message: data.user_message,
-        ai_message: data.ai_message
+        response: fullResponse || doneData?.response || "",
+        user_message: doneData?.user_message,
+        ai_message: doneData?.ai_message
       };
     } catch (error: any) {
       console.error("NetSuite AI Connector Error:", error);
