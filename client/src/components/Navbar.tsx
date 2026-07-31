@@ -1,8 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
-import { FiSettings, FiMoon, FiSun, FiZap, FiDatabase, FiCpu, FiRefreshCw } from 'react-icons/fi';
+import React, { useEffect, useState, useRef } from 'react';
+import { FiSettings, FiMoon, FiSun, FiZap, FiDatabase, FiCpu, FiRefreshCw, FiChevronDown, FiChevronUp, FiCheck, FiPlus, FiTrash } from 'react-icons/fi';
 import { useDarkMode } from '../contexts/DarkModeContext';
-import NetSuiteConnector from './NetSuiteConnector';
+import NetSuiteConnector, { type AccountItem } from './NetSuiteConnector';
 
 interface NavbarProps {
   onConfigClick: () => void;
@@ -19,6 +19,11 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
   const [modelName, setModelName] = useState('Not Configured');
   const [provider, setProvider] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const fetchStatus = async () => {
     setIsRefreshing(true);
@@ -50,6 +55,58 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
     }
   };
 
+  const fetchAccounts = async () => {
+    setIsLoadingAccounts(true);
+    try {
+      const res = await connector.getAccounts();
+      setAccounts(res.accounts || []);
+      if (res.active_account_id) {
+        setAccountId(res.active_account_id);
+        setNetSuiteStatus(true);
+      }
+    } catch (e) {
+      console.error('Error fetching NetSuite accounts list:', e);
+    } finally {
+      setIsLoadingAccounts(false);
+    }
+  };
+
+  const handleAccountClick = () => {
+    const nextState = !isAccountMenuOpen;
+    setIsAccountMenuOpen(nextState);
+    if (nextState) {
+      fetchAccounts();
+    }
+  };
+
+  const handleSelectAccount = async (selectedAccountId: string) => {
+    try {
+      await connector.selectAccount(selectedAccountId);
+      setAccountId(selectedAccountId);
+      setNetSuiteStatus(true);
+      setIsAccountMenuOpen(false);
+      window.dispatchEvent(new CustomEvent('suite_forge_config_updated'));
+      fetchStatus();
+    } catch (e) {
+      console.error('Failed to select account:', e);
+    }
+  };
+
+  const handleDeleteAccount = async (accountId: string) => {
+    try {
+      await connector.deleteAccount(accountId);
+      setAccounts((prev) => prev.filter((acc) => acc.account_id !== accountId));
+      if (accountId === accountId) {
+        setAccountId('');
+        setNetSuiteStatus(false);
+      }
+      window.dispatchEvent(new CustomEvent('suite_forge_config_updated'));
+      fetchStatus();
+    } catch (e) {
+      console.error('Failed to delete account:', e);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
 
@@ -62,6 +119,21 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
       window.removeEventListener('suite_forge_config_updated', handleConfigUpdated);
     };
   }, [refreshTrigger]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    if (isAccountMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isAccountMenuOpen]);
 
   return (
     <nav className="h-16 px-4 md:px-6 flex items-center justify-between border-b backdrop-blur-xl z-30 transition-colors duration-200 bg-white/70 border-slate-200/80 dark:bg-slate-900/80 dark:border-slate-800/80 shadow-sm shrink-0">
@@ -149,6 +221,90 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
           {isDarkMode ? <FiSun className="w-4 h-4 text-amber-400" /> : <FiMoon className="w-4 h-4 text-slate-700" />}
         </button>
 
+        {/* Account Selector Dropdown */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={handleAccountClick}
+            className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md shadow-indigo-600/20 active:scale-95 flex items-center gap-1.5 text-xs font-semibold"
+          >
+            <span className="font-medium text-indigo-100 hidden md:inline">
+              Account:
+            </span>
+            <span className="font-mono text-white">
+              {accountId ? accountId : 'Disconnected'}
+            </span>
+            {isAccountMenuOpen ? <FiChevronUp className="w-4 h-4" /> : <FiChevronDown className="w-4 h-4" />}
+          </button>
+
+          {isAccountMenuOpen && (
+            <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400">
+                  Available Accounts
+                </span>
+                {isLoadingAccounts && (
+                  <FiRefreshCw className="w-3 h-3 animate-spin text-indigo-500" />
+                )}
+              </div>
+
+              <div className="max-h-60 overflow-y-auto py-1">
+                {accounts.length === 0 ? (
+                  <div className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 text-center">
+                    {isLoadingAccounts ? 'Loading accounts...' : 'No accounts configured.'}
+                  </div>
+                ) : (
+                  accounts.map((acc) => {
+                    const isActive = acc.account_id === accountId;
+                    return (
+                      <button
+                        key={acc.account_id}
+                        onClick={() => handleSelectAccount(acc.account_id)}
+                        className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors hover:bg-slate-100 dark:hover:bg-slate-700/50 ${
+                          isActive
+                            ? 'bg-indigo-50/80 dark:bg-indigo-950/40 font-semibold text-indigo-600 dark:text-indigo-400'
+                            : 'text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-mono font-medium">{acc.account_id}</span>
+                          {acc.client_id && (
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[170px]">
+                              Client: {acc.client_id}
+                            </span>
+                          )}
+                        </div>
+                        {isActive && <FiCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 ml-2" />}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteAccount(acc.account_id);
+                          }}
+                          className="text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        >
+                          <FiTrash className="w-4 h-4" />
+                        </button>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-700/60 pt-1 px-1 mt-1">
+                <button
+                  onClick={() => {
+                    setIsAccountMenuOpen(false);
+                    onConfigClick();
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg flex items-center gap-2 font-medium transition-colors"
+                >
+                  <FiPlus className="w-3.5 h-3.5" />
+                  <span>Add / Manage Accounts</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Settings Modal Button */}
         <button
           onClick={onConfigClick}
@@ -164,5 +320,6 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
 };
 
 export default Navbar;
+
 
 

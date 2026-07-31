@@ -193,6 +193,17 @@ class DatabaseManager:
         logger.info(f"Account {account_id} saved in database (is_active={set_active})")
         return self.get_account(account_id)
 
+    def delete_account(self, account_id: str) -> None:
+        """Delete an account from the database."""
+        with self._lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
+            conn.commit()
+            conn.close()
+
+        logger.info(f"Account {account_id} deleted from database")
+
     def get_account(self, account_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             conn = self._get_connection()

@@ -33,6 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+temp_auth = None
+
 class AuthRequest(BaseModel):
     client_id: str
     account_id: str
@@ -67,13 +69,14 @@ async def auth(body: AuthRequest):
         "account_id": body.account_id,
         "client_secret": body.client_secret
     }
+    temp_auth = config
     # Register or update account in SQLite and mark active
-    db.add_or_update_account(
-        account_id=body.account_id,
-        client_id=body.client_id,
-        client_secret=body.client_secret,
-        set_active=True
-    )
+    # db.add_or_update_account(
+    #     account_id=body.account_id,
+    #     client_id=body.client_id,
+    #     client_secret=body.client_secret,
+    #     set_active=True
+    # )
 
     session_id = secrets.token_urlsafe(32)
     auth_url = auth_service.get_authorization_url(session_id, config)
@@ -91,12 +94,25 @@ def callback(code: Optional[str] = None, state: Optional[str] = None, error: Opt
     try:
         tokens = auth_service.exchange_code_for_tokens(code, state)
         active_acc = db.get_active_account()
-        if active_acc:
+        if temp_auth:
+            db.add_or_update_account(
+                account_id=temp_auth["account_id"],
+                client_id=temp_auth["client_id"],
+                client_secret=temp_auth["client_secret"],
+                set_active=True
+            )
+
             db.update_tokens(
-                account_id=active_acc["account_id"],
+                account_id=temp_auth["account_id"],
                 access_token=tokens.get("access_token"),
                 refresh_token=tokens.get("refresh_token")
             )
+        # if active_acc:
+        #     db.update_tokens(
+        #         account_id=active_acc["account_id"],
+        #         access_token=tokens.get("access_token"),
+        #         refresh_token=tokens.get("refresh_token")
+        #     )
         else:
             db.cache_set("netsuite_tokens", tokens)
 
@@ -262,6 +278,12 @@ def clear_messages(session_id: str = "default"):
     """Clear message history for a session."""
     db.clear_messages(session_id=session_id)
     return {"status": "success", "message": "Message history cleared."}
+
+@app.delete("/account")
+def delete_account(account_id: str):
+    """Delete the active account."""
+    db.delete_account(account_id=account_id)
+    return {"status": "success", "message": "Account deleted."}
 
 @app.get("/get-tools-list")
 def get_tools_list():
