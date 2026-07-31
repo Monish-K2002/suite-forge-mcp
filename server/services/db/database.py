@@ -354,17 +354,25 @@ class DatabaseManager:
                 "model_used": row["model_used"],
                 "timestamp": str(row["timestamp"])
             }
-    def get_messages(self, session_id: str = "default", limit: int = 100) -> List[Dict[str, Any]]:
+    def get_messages(self, session_id: str = "default", limit: int = 100, account_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retrieve stored chat history messages."""
         with self._lock:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT * FROM messages 
-                WHERE session_id = ? 
-                ORDER BY id ASC 
-                LIMIT ?
-            """, (session_id, limit))
+            if account_id is not None:
+                cursor.execute("""
+                    SELECT * FROM messages 
+                    WHERE session_id = ? AND (account_id = ? OR (account_id IS NULL AND ? = ''))
+                    ORDER BY id ASC 
+                    LIMIT ?
+                """, (session_id, account_id, account_id, limit))
+            else:
+                cursor.execute("""
+                    SELECT * FROM messages 
+                    WHERE session_id = ? 
+                    ORDER BY id ASC 
+                    LIMIT ?
+                """, (session_id, limit))
             rows = cursor.fetchall()
             conn.close()
 
@@ -381,33 +389,52 @@ class DatabaseManager:
                 for row in rows
             ]
 
-    def clear_messages(self, session_id: str = "default") -> bool:
+    def clear_messages(self, session_id: str = "default", account_id: Optional[str] = None) -> bool:
         """Clear chat messages for a session."""
         with self._lock:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+            if account_id is not None:
+                cursor.execute("""
+                    DELETE FROM messages 
+                    WHERE session_id = ? AND (account_id = ? OR (account_id IS NULL AND ? = ''))
+                """, (session_id, account_id, account_id))
+            else:
+                cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             deleted = cursor.rowcount > 0
             conn.commit()
             conn.close()
         return deleted
 
-    def get_sessions(self) -> List[Dict[str, Any]]:
+    def get_sessions(self, account_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """List distinct chat sessions with title snippet, message count, and last timestamp."""
         with self._lock:
             conn = self._get_connection()
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT 
-                    session_id,
-                    content as title,
-                    MAX(timestamp) as last_updated,
-                    COUNT(*) as message_count
-                FROM messages
-                WHERE sender = 'user'
-                GROUP BY session_id
-                ORDER BY last_updated DESC
-            """)
+            if account_id is not None:
+                cursor.execute("""
+                    SELECT 
+                        session_id,
+                        content as title,
+                        MAX(timestamp) as last_updated,
+                        COUNT(*) as message_count
+                    FROM messages
+                    WHERE sender = 'user' AND (account_id = ? OR (account_id IS NULL AND ? = ''))
+                    GROUP BY session_id
+                    ORDER BY last_updated DESC
+                """, (account_id, account_id))
+            else:
+                cursor.execute("""
+                    SELECT 
+                        session_id,
+                        content as title,
+                        MAX(timestamp) as last_updated,
+                        COUNT(*) as message_count
+                    FROM messages
+                    WHERE sender = 'user'
+                    GROUP BY session_id
+                    ORDER BY last_updated DESC
+                """)
             rows = cursor.fetchall()
             conn.close()
 

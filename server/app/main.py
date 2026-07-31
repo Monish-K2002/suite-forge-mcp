@@ -33,7 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-temp_auth = None
+pending_auths: Dict[str, Dict[str, Any]] = {}
 
 class AuthRequest(BaseModel):
     client_id: str
@@ -64,21 +64,16 @@ def read_root():
 
 @app.post("/auth")
 async def auth(body: AuthRequest):
+    session_id = secrets.token_urlsafe(32)
     config = {
         "client_id": body.client_id,
         "account_id": body.account_id,
         "client_secret": body.client_secret
     }
-    temp_auth = config
-    # Register or update account in SQLite and mark active
-    # db.add_or_update_account(
-    #     account_id=body.account_id,
-    #     client_id=body.client_id,
-    #     client_secret=body.client_secret,
-    #     set_active=True
-    # )
+    # Store temporary pending auth info in memory until callback authenticates successfully.
+    # The account ID will NOT be saved to the DB until OAuth token exchange completes.
+    pending_auths[session_id] = config
 
-    session_id = secrets.token_urlsafe(32)
     auth_url = auth_service.get_authorization_url(session_id, config)
 
     return {"auth_url": auth_url, "session_id": session_id}
@@ -86,35 +81,37 @@ async def auth(body: AuthRequest):
 @app.get("/callback")
 def callback(code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
     if error:
+        if state and state in pending_auths:
+            pending_auths.pop(state, None)
         return HTMLResponse(content=f"<html><body><h2>Authentication Failed</h2><p>{error}</p></body></html>", status_code=400)
     
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing required authorization parameters (code, state).")
 
+    temp_auth = pending_auths.pop(state, None)
+
     try:
         tokens = auth_service.exchange_code_for_tokens(code, state)
-        active_acc = db.get_active_account()
         if temp_auth:
+            # Save account to SQLite DB ONLY after successful authentication
             db.add_or_update_account(
                 account_id=temp_auth["account_id"],
                 client_id=temp_auth["client_id"],
-                client_secret=temp_auth["client_secret"],
+                client_secret=temp_auth.get("client_secret"),
+                access_token=tokens.get("access_token"),
+                refresh_token=tokens.get("refresh_token"),
                 set_active=True
             )
-
-            db.update_tokens(
-                account_id=temp_auth["account_id"],
-                access_token=tokens.get("access_token"),
-                refresh_token=tokens.get("refresh_token")
-            )
-        # if active_acc:
-        #     db.update_tokens(
-        #         account_id=active_acc["account_id"],
-        #         access_token=tokens.get("access_token"),
-        #         refresh_token=tokens.get("refresh_token")
-        #     )
         else:
-            db.cache_set("netsuite_tokens", tokens)
+            active_acc = db.get_active_account()
+            if active_acc:
+                db.update_tokens(
+                    account_id=active_acc["account_id"],
+                    access_token=tokens.get("access_token"),
+                    refresh_token=tokens.get("refresh_token")
+                )
+            else:
+                db.cache_set("netsuite_tokens", tokens)
 
         html_content = """
         <html>
@@ -261,22 +258,31 @@ def chat(body: ChatRequest):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.get("/sessions")
-def get_sessions():
+def get_sessions(account_id: Optional[str] = None):
     """Retrieve list of active chat sessions from SQLite database."""
-    sessions = db.get_sessions()
+    if account_id is None:
+        active_account = db.get_active_account()
+        account_id = active_account["account_id"] if active_account else None
+    sessions = db.get_sessions(account_id=account_id)
     return {"sessions": sessions}
 
 @app.get("/messages")
-def get_messages(session_id: str = "default", limit: int = 100):
+def get_messages(session_id: str = "default", limit: int = 100, account_id: Optional[str] = None):
     """Retrieve chat message history from SQLite database."""
-    messages = db.get_messages(session_id=session_id, limit=limit)
+    if account_id is None:
+        active_account = db.get_active_account()
+        account_id = active_account["account_id"] if active_account else None
+    messages = db.get_messages(session_id=session_id, limit=limit, account_id=account_id)
     return {"messages": messages}
 
 
 @app.delete("/messages")
-def clear_messages(session_id: str = "default"):
+def clear_messages(session_id: str = "default", account_id: Optional[str] = None):
     """Clear message history for a session."""
-    db.clear_messages(session_id=session_id)
+    if account_id is None:
+        active_account = db.get_active_account()
+        account_id = active_account["account_id"] if active_account else None
+    db.clear_messages(session_id=session_id, account_id=account_id)
     return {"status": "success", "message": "Message history cleared."}
 
 @app.delete("/account")

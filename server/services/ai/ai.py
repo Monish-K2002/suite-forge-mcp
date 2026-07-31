@@ -189,11 +189,16 @@ class AIService:
 
         try:
             llm = self.create_llm_instance(api_provider, api_key, model_name)
-            if getattr(self, 'tools', None) and create_agent:
-                agent = create_agent(model=llm, tools=self.tools)
+            if create_agent:
+                if getattr(self, 'tools', None):
+                    agent = create_agent(model=llm, tools=self.tools)
+                else:
+                    agent = create_agent(model=llm)
                 async for event in agent.astream({"messages": [("user", message)]}, stream_mode="messages"):
                     chunk, _ = event
+                    print("chunk:", chunk)
                     text = extract_message_text(chunk)
+                    print("text:", text)
                     if text:
                         yield text
             else:

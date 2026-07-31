@@ -12,20 +12,20 @@ export default function App() {
   const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
   const [savedSessions, setSavedSessions] = useState<HistoryItem[]>([]);
 
-  const loadSessions = async () => {
+  const loadSessions = async (accId?: string) => {
     try {
-      const dbSessions = await connector.getSessions();
-      if (dbSessions && dbSessions.length > 0) {
-        setSavedSessions(dbSessions);
-      }
+      const dbSessions = await connector.getSessions(accId);
+      setSavedSessions(dbSessions || []);
+      return dbSessions || [];
     } catch (e) {
       console.error('Failed to load sessions from SQLite DB', e);
+      return [];
     }
   };
 
-  const loadStoredMessages = async (sessionId: string) => {
+  const loadStoredMessages = async (sessionId: string, accId?: string) => {
     try {
-      const storedMsgs = await connector.getMessages(sessionId);
+      const storedMsgs = await connector.getMessages(sessionId, accId);
       if (storedMsgs) {
         const formatted = storedMsgs.map((m) => ({
           text: m.content,
@@ -40,18 +40,58 @@ export default function App() {
     }
   };
 
-  // Load chat messages and sessions from backend SQLite DB on startup
+  const loadAccountAndData = async () => {
+    try {
+      const config = await connector.getConfig();
+      const currentAccId = config.netsuite_account_id || '';
+      const sessions = await loadSessions(currentAccId);
+
+      const sessionExists = sessions.some((s: HistoryItem) => s.id === activeSessionId);
+
+      if (sessionExists) {
+        await loadStoredMessages(activeSessionId, currentAccId);
+      } else if (sessions.length > 0) {
+        const latestSessionId = sessions[0].id;
+        setActiveSessionId(latestSessionId);
+        await loadStoredMessages(latestSessionId, currentAccId);
+      } else {
+        setActiveSessionId('default');
+        setMessages([]);
+      }
+    } catch (e) {
+      console.error('Error loading account and chat data:', e);
+    }
+  };
+
   useEffect(() => {
-    loadSessions();
-    loadStoredMessages(activeSessionId);
+    loadAccountAndData();
+
+    const handleConfigUpdated = () => {
+      loadAccountAndData();
+    };
+
+    window.addEventListener('suite_forge_config_updated', handleConfigUpdated);
+    return () => {
+      window.removeEventListener('suite_forge_config_updated', handleConfigUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchSessionData = async () => {
+      const config = await connector.getConfig().catch(() => ({ netsuite_account_id: '' }));
+      const currentAccId = config.netsuite_account_id || '';
+      loadStoredMessages(activeSessionId, currentAccId);
+    };
+    fetchSessionData();
   }, [activeSessionId]);
 
   const handleSendMessage = async (message: string, onChunk?: (chunk: string) => void): Promise<string> => {
     const result = await connector.sendMessage(message, activeSessionId, onChunk);
     const response = typeof result === 'string' ? result : result.response;
     
-    // Refresh sessions list after message save
-    loadSessions();
+    // Refresh sessions list after message save for active account
+    const config = await connector.getConfig().catch(() => ({ netsuite_account_id: '' }));
+    loadSessions(config.netsuite_account_id || '');
     
     return response;
   };
@@ -68,7 +108,6 @@ export default function App() {
 
   const handleSelectSession = (sessionId: string) => {
     setActiveSessionId(sessionId);
-    loadStoredMessages(sessionId);
   };
 
   const handleSelectPrompt = (promptText: string) => {
@@ -93,8 +132,9 @@ export default function App() {
         });
       }
     })
-      .then(() => {
-        loadSessions();
+      .then(async () => {
+        const config = await connector.getConfig().catch(() => ({ netsuite_account_id: '' }));
+        loadSessions(config.netsuite_account_id || '');
       })
       .catch((err: any) => {
         const errorMsg = err?.message || 'Failed to send message.';
@@ -118,12 +158,14 @@ export default function App() {
 
   const handleClearHistory = async () => {
     try {
-      await connector.clearMessages(activeSessionId);
+      const config = await connector.getConfig().catch(() => ({ netsuite_account_id: '' }));
+      const currentAccId = config.netsuite_account_id || '';
+      await connector.clearMessages(activeSessionId, currentAccId);
+      loadSessions(currentAccId);
     } catch (e) {
       console.error('Failed to clear messages', e);
     }
     setMessages([]);
-    loadSessions();
   };
 
   return (

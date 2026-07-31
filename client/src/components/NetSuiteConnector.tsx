@@ -192,9 +192,12 @@ export class NetSuiteConnector {
     return await response.json();
   }
 
-  async getSessions(): Promise<any[]> {
+  async getSessions(accountId?: string): Promise<any[]> {
     try {
-      const response = await fetch(`${this.apiEndpoint}/sessions`);
+      const url = accountId !== undefined
+        ? `${this.apiEndpoint}/sessions?account_id=${encodeURIComponent(accountId)}`
+        : `${this.apiEndpoint}/sessions`;
+      const response = await fetch(url);
       if (!response.ok) return [];
       const data = await response.json();
       return data.sessions || [];
@@ -204,9 +207,13 @@ export class NetSuiteConnector {
     }
   }
 
-  async getMessages(sessionId: string = 'default'): Promise<ChatMessageItem[]> {
+  async getMessages(sessionId: string = 'default', accountId?: string): Promise<ChatMessageItem[]> {
     try {
-      const response = await fetch(`${this.apiEndpoint}/messages?session_id=${encodeURIComponent(sessionId)}`);
+      let url = `${this.apiEndpoint}/messages?session_id=${encodeURIComponent(sessionId)}`;
+      if (accountId !== undefined) {
+        url += `&account_id=${encodeURIComponent(accountId)}`;
+      }
+      const response = await fetch(url);
       if (!response.ok) {
         return [];
       }
@@ -218,8 +225,12 @@ export class NetSuiteConnector {
     }
   }
 
-  async clearMessages(sessionId: string = 'default'): Promise<any> {
-    const response = await fetch(`${this.apiEndpoint}/messages?session_id=${encodeURIComponent(sessionId)}`, {
+  async clearMessages(sessionId: string = 'default', accountId?: string): Promise<any> {
+    let url = `${this.apiEndpoint}/messages?session_id=${encodeURIComponent(sessionId)}`;
+    if (accountId !== undefined) {
+      url += `&account_id=${encodeURIComponent(accountId)}`;
+    }
+    const response = await fetch(url, {
       method: "DELETE",
     });
     if (!response.ok) {
