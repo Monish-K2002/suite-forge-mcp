@@ -189,13 +189,17 @@ def get_config():
     selected_model = db.get_setting("selected_model", "")
     api_provider = db.get_setting("api_provider", "")
     active_account = db.get_active_account()
+    client_id = active_account["client_id"] if active_account else ""
+    api_key = db.get_setting("api_key")
     has_api_key = bool(db.get_setting("api_key"))
     
     return {
         "selected_model": selected_model,
         "api_provider": api_provider,
         "netsuite_account_id": active_account["account_id"] if active_account else "",
-        "has_api_key": has_api_key
+        "has_api_key": has_api_key,
+        "client_id": client_id,
+        "api_key": api_key
     }
 
 # --- CHAT & MESSAGES ENDPOINTS ---

@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   FiSend, 
   FiPlus, 
@@ -71,63 +73,122 @@ const CodeBlock: React.FC<{ code: string; language: string }> = ({ code, languag
   );
 };
 
-// Rich Markdown Text Formatter
-const FormattedMessage: React.FC<{ text: string }> = ({ text }) => {
-  // Regex to split code blocks: ```lang ... ```
-  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = codeBlockRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', content: text.substring(lastIndex, match.index) });
-    }
-    parts.push({ type: 'code', language: match[1] || 'javascript', content: match[2].trim() });
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push({ type: 'text', content: String(text).substring(lastIndex) });
-  }
-
+// Rich Markdown Text Formatter using react-markdown
+const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = ({ text, isUser = false }) => {
   return (
-    <div className="space-y-2 text-sm leading-relaxed">
-      {parts.map((part, idx) => {
-        if (part.type === 'code') {
-          return <CodeBlock key={idx} code={part.content} language={part.language} />;
-        }
-        
-        // Render regular text line breaks and simple inline formatting
-        const paragraphs = part.content.split('\n\n');
-        return (
-          <div key={idx} className="space-y-2">
-            {paragraphs.map((para, pIdx) => {
-              if (!para.trim()) return null;
-              
-              // Handle line-by-line formatting
-              const lines = para.split('\n');
+    <div className={`text-sm leading-relaxed max-w-none ${isUser ? 'text-white' : ''}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          pre({ children }) {
+            return <>{children}</>;
+          },
+          code({ className, children, ...props }: any) {
+            const match = /language-(\w+)/.exec(className || '');
+            const codeString = String(children).replace(/\n$/, '');
+            const isMultiLine = codeString.includes('\n');
+
+            if (match || isMultiLine) {
               return (
-                <p key={pIdx} className="leading-relaxed">
-                  {lines.map((line, lIdx) => (
-                    <React.Fragment key={lIdx}>
-                      {lIdx > 0 && <br />}
-                      {line.startsWith('- ') || line.startsWith('* ') ? (
-                        <span className="flex items-start gap-2 my-1 pl-2">
-                          <span className="text-indigo-400 font-bold">•</span>
-                          <span>{line.substring(2)}</span>
-                        </span>
-                      ) : (
-                        line
-                      )}
-                    </React.Fragment>
-                  ))}
-                </p>
+                <CodeBlock
+                  code={codeString}
+                  language={match ? match[1] : ''}
+                />
               );
-            })}
-          </div>
-        );
-      })}
+            }
+
+            return (
+              <code
+                className={`px-1.5 py-0.5 rounded font-mono text-[13px] border ${
+                  isUser
+                    ? 'bg-indigo-700/80 text-indigo-100 border-indigo-500/60'
+                    : 'bg-slate-800/90 text-indigo-300 dark:text-indigo-200 border-slate-700/60'
+                }`}
+                {...props}
+              >
+                {children}
+              </code>
+            );
+          },
+          p({ children }) {
+            return <p className="leading-relaxed mb-2.5 last:mb-0">{children}</p>;
+          },
+          ul({ children }) {
+            return <ul className="list-disc list-outside pl-5 space-y-1 my-2">{children}</ul>;
+          },
+          ol({ children }) {
+            return <ol className="list-decimal list-outside pl-5 space-y-1 my-2">{children}</ol>;
+          },
+          li({ children }) {
+            return <li className="leading-relaxed pl-0.5">{children}</li>;
+          },
+          h1({ children }) {
+            return <h1 className="text-lg font-bold my-3 border-b border-slate-700/60 pb-1">{children}</h1>;
+          },
+          h2({ children }) {
+            return <h2 className="text-base font-bold my-2.5">{children}</h2>;
+          },
+          h3({ children }) {
+            return <h3 className="text-sm font-bold my-2">{children}</h3>;
+          },
+          blockquote({ children }) {
+            return (
+              <blockquote
+                className={`border-l-4 pl-3.5 py-1 my-2.5 italic rounded-r-md ${
+                  isUser
+                    ? 'border-indigo-300 bg-indigo-700/40 text-indigo-100'
+                    : 'border-indigo-500/80 bg-indigo-950/20 text-slate-300'
+                }`}
+              >
+                {children}
+              </blockquote>
+            );
+          },
+          table({ children }) {
+            return (
+              <div className="overflow-x-auto my-3 rounded-lg border border-slate-700/80 shadow-md">
+                <table className="min-w-full divide-y divide-slate-700/80 text-left text-xs">
+                  {children}
+                </table>
+              </div>
+            );
+          },
+          thead({ children }) {
+            return <thead className="bg-slate-900/90 text-slate-200 font-semibold">{children}</thead>;
+          },
+          tbody({ children }) {
+            return <tbody className="divide-y divide-slate-800/80 bg-slate-950/50">{children}</tbody>;
+          },
+          tr({ children }) {
+            return <tr className="hover:bg-slate-800/40 transition-colors">{children}</tr>;
+          },
+          th({ children }) {
+            return <th className="px-3 py-2 text-slate-200 font-semibold">{children}</th>;
+          },
+          td({ children }) {
+            return <td className="px-3 py-2 text-slate-300 font-mono text-xs">{children}</td>;
+          },
+          a({ href, children }) {
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${
+                  isUser ? 'text-indigo-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'
+                } underline underline-offset-2 transition-colors font-medium`}
+              >
+                {children}
+              </a>
+            );
+          },
+          hr() {
+            return <hr className={`my-4 ${isUser ? 'border-indigo-400/40' : 'border-slate-700/60'}`} />;
+          }
+        }}
+      >
+        {text}
+      </ReactMarkdown>
     </div>
   );
 };
@@ -375,7 +436,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                           ? 'bg-slate-800/80 text-slate-100 border-slate-700/80 rounded-tl-xs'
                           : 'bg-white text-slate-800 border-slate-200 rounded-tl-xs shadow-slate-100'
                     }`}>
-                      <FormattedMessage text={message.text} />
+                      <FormattedMessage text={message.text} isUser={isUser} />
                     </div>
 
                     {/* Action Bar (Copy Button) */}

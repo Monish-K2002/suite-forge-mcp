@@ -189,16 +189,21 @@ class AIService:
 
         try:
             llm = self.create_llm_instance(api_provider, api_key, model_name)
+            system_prompt = """
+            You are a NetSuite Expert Solution provider. 
+            You help users with their NetSuite related questions.
+            Refer to Oracle Docs for Suitescript related queries.
+            """
             if create_agent:
                 if getattr(self, 'tools', None):
-                    agent = create_agent(model=llm, tools=self.tools)
+                    agent = create_agent(model=llm, tools=self.tools, system_prompt=system_prompt)
                 else:
-                    agent = create_agent(model=llm)
+                    agent = create_agent(model=llm, system_prompt=system_prompt)
                 async for event in agent.astream({"messages": [("user", message)]}, stream_mode="messages"):
                     chunk, _ = event
-                    print("chunk:", chunk)
+                    # print("chunk:", chunk)
                     text = extract_message_text(chunk)
-                    print("text:", text)
+                    # print("text:", text)
                     if text:
                         yield text
             else:

@@ -72,6 +72,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   const [toolSearchQuery, setToolSearchQuery] = useState('');
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
   const [copiedToolName, setCopiedToolName] = useState<string | null>(null);
+  const [showClientId, setShowClientId] = useState(false);
 
   const notifyConfigUpdated = () => {
     onConfigSaved?.();
@@ -86,12 +87,15 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   const getCacheConfig = async () => {
     try {
       const config = await connector.getConfig();
+      console.log('config',config)
       if (config.api_provider) setApiProvider(config.api_provider);
       if (config.selected_model) {
         setSelectedModel(config.selected_model);
         setInUseModelName(config.selected_model);
       }
       if (config.netsuite_account_id) setAccountId(config.netsuite_account_id);
+      if (config.client_id) setClientId(config.client_id);
+      if (config.api_key) setApiKey(config.api_key);
     } catch (err) {
       console.error("Failed to load initial configuration:", err);
     }
@@ -357,13 +361,23 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                   Integration Client ID
                 </label>
-                <input 
-                  type="text" 
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  placeholder="e.g. 849392... (NetSuite OAuth Client ID)"
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                />
+                <div className="relative">
+                  <FiKey className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                  <input 
+                    type={showClientId ? "text" : "password"} 
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    placeholder="e.g. 849392... (NetSuite OAuth Client ID)"
+                    className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-75"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowClientId(!showClientId)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    {showClientId ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div className="pt-2">
@@ -670,7 +684,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     type={showApiKey ? "text" : "password"} 
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    disabled={Boolean(inUseModelName && apiKey && !loading)}
+                    // disabled={Boolean(inUseModelName && apiKey && !loading)}
                     placeholder={apiProvider ? `Enter ${apiProvider.toUpperCase()} API Key...` : "Select provider first"}
                     className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-75"
                   />

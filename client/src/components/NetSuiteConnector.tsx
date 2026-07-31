@@ -3,6 +3,8 @@ export interface ConfigResponse {
   api_provider: string;
   netsuite_account_id: string;
   has_api_key: boolean;
+  client_id: string;
+  api_key: string;
 }
 
 export interface AccountItem {
