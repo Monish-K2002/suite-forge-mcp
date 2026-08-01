@@ -4,16 +4,18 @@ from typing import List, Dict, Any, Optional
 from google import genai
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.messages import SystemMessage
-
-try:
-    from langchain_mcp_adapters.client import MultiServerMCPClient
-except Exception:
-    MultiServerMCPClient = None
-
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain.agents import create_agent
-
 from services.db.database import DatabaseManager
+
+logging.basicConfig(
+    filename="ai.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    filemode="a"
+)
 logger = logging.getLogger(__name__)
+
 sys_message = SystemMessage(
     """
     You are a helpful NetSuite Assistant. You help users with their NetSuite tasks.
@@ -31,11 +33,22 @@ def extract_text_content(content: Any) -> str:
         parts = []
         for item in content:
             if isinstance(item, dict):
-                parts.append(str(item.get("text", item)))
+                item_type = item.get("type", "")
+                if item_type == "thinking" or "thinking" in item:
+                    think_text = item.get("thinking") or item.get("text") or item.get("content") or ""
+                    if think_text:
+                        parts.append(f"<think>{think_text}</think>")
+                else:
+                    text_val = item.get("text")
+                    if text_val is not None:
+                        parts.append(str(text_val))
+                    else:
+                        parts.append(str(item))
             else:
                 parts.append(str(item))
         return "".join(parts)
     return str(content)
+
 
 
 def extract_message_text(message: Any) -> str:
@@ -202,6 +215,7 @@ class AIService:
                 async for event in agent.astream({"messages": [("user", message)]}, stream_mode="messages"):
                     chunk, _ = event
                     # print("chunk:", chunk)
+                    logger.info(f"chunk: {chunk}")
                     text = extract_message_text(chunk)
                     # print("text:", text)
                     if text:
@@ -216,7 +230,7 @@ class AIService:
                     for chunk in llm.stream(message):
                         text = extract_message_text(chunk)
                         if text:
-                            yield text
+                                yield text
             logger.debug(f"AI streaming completed successfully for model {model_name}")
         except Exception as e:
             logger.error(f"Error in stream_chat service: {e}")

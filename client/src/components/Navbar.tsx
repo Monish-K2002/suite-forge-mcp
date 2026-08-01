@@ -2,14 +2,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { FiSettings, FiMoon, FiSun, FiZap, FiDatabase, FiCpu, FiRefreshCw, FiChevronDown, FiChevronUp, FiCheck, FiPlus, FiTrash } from 'react-icons/fi';
 import { useDarkMode } from '../contexts/DarkModeContext';
-import NetSuiteConnector, { type AccountItem } from './NetSuiteConnector';
+import { connector, type AccountItem } from './NetSuiteConnector';
 
 interface NavbarProps {
   onConfigClick: () => void;
   refreshTrigger?: number;
 }
-
-const connector = new NetSuiteConnector();
 
 const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
   const { isDarkMode, toggleDarkMode } = useDarkMode();

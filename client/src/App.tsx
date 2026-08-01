@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import Chatbot from './components/Chatbot';
 import HistoryPanel from './components/HistoryPanel';
 import type { HistoryItem } from './components/HistoryPanel';
-import NetSuiteConnector from './components/NetSuiteConnector';
+import NetSuiteConnector, { connector } from './components/NetSuiteConnector';
 
-const connector = new NetSuiteConnector();
 
 export default function App() {
   const [showHistory, setShowHistory] = useState(false);
@@ -110,36 +109,15 @@ export default function App() {
     setActiveSessionId(sessionId);
   };
 
-  const handleSelectPrompt = (promptText: string) => {
-    setMessages((prev) => [...prev, { text: promptText, sender: 'user' }]);
-    let botMsgAdded = false;
+  const handleSelectPrompt = async (promptText: string) => {
+    try {
+      setMessages((prev) => [...prev, { text: promptText, sender: 'user' }]);
+      let botMsgAdded = false;
 
-    connector.sendMessage(promptText, activeSessionId, (chunk: string) => {
-      if (!botMsgAdded) {
-        botMsgAdded = true;
-        setMessages((prev) => [...prev, { text: chunk, sender: 'bot' }]);
-      } else {
-        setMessages((prev) => {
-          const updated = [...prev];
-          const lastIdx = updated.length - 1;
-          if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
-            updated[lastIdx] = {
-              ...updated[lastIdx],
-              text: updated[lastIdx].text + chunk
-            };
-          }
-          return updated;
-        });
-      }
-    })
-      .then(async () => {
-        const config = await connector.getConfig().catch(() => ({ netsuite_account_id: '' }));
-        loadSessions(config.netsuite_account_id || '');
-      })
-      .catch((err: any) => {
-        const errorMsg = err?.message || 'Failed to send message.';
+      await handleSendMessage(promptText, (chunk: string) => {
         if (!botMsgAdded) {
-          setMessages((prev) => [...prev, { text: `⚠️ **Error**: ${errorMsg}`, sender: 'bot' }]);
+          botMsgAdded = true;
+          setMessages((prev) => [...prev, { text: chunk, sender: 'bot' }]);
         } else {
           setMessages((prev) => {
             const updated = [...prev];
@@ -147,14 +125,18 @@ export default function App() {
             if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
               updated[lastIdx] = {
                 ...updated[lastIdx],
-                text: updated[lastIdx].text + `\n\n⚠️ **Error**: ${errorMsg}`
+                text: updated[lastIdx].text + chunk
               };
             }
             return updated;
           });
         }
       });
+    } catch (err: any) {
+      console.error('Error sending select prompt:', err);
+    }
   };
+
 
   const handleClearHistory = async () => {
     try {

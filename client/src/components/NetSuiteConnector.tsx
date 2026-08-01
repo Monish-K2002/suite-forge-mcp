@@ -296,9 +296,10 @@ export class NetSuiteConnector {
       throw new Error("Failed to fetch tools list.");
     }
     const data = await response.json();
-    return data || [];
   }
 }
 
+export const connector = new NetSuiteConnector();
 export default NetSuiteConnector;
+
 

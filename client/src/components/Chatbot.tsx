@@ -15,8 +15,12 @@ import {
   FiTrash2, 
   FiStar,
   FiCornerDownLeft,
-  FiTerminal
+  FiTerminal,
+  FiCpu,
+  FiChevronDown,
+  FiChevronRight
 } from 'react-icons/fi';
+
 import { useDarkMode } from '../contexts/DarkModeContext';
 
 interface ChatbotProps {
@@ -30,8 +34,10 @@ interface ChatbotProps {
   ) => void;
 }
 
+const REMARK_PLUGINS = [remarkGfm];
+
 // Formatted Code Block Component with Copy Button
-const CodeBlock: React.FC<{ code: string; language: string }> = ({ code, language }) => {
+const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ code, language }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -41,15 +47,15 @@ const CodeBlock: React.FC<{ code: string; language: string }> = ({ code, languag
   };
 
   return (
-    <div className="my-3 rounded-xl border border-slate-700/80 bg-slate-950 overflow-hidden shadow-lg">
+    <div className="my-3 rounded-xl border border-slate-700/80 bg-slate-950 overflow-hidden shadow-lg max-w-full min-w-0">
       <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 text-slate-400 text-xs font-mono">
-        <span className="flex items-center gap-1.5 font-semibold text-slate-300 uppercase">
-          <FiTerminal className="w-3.5 h-3.5 text-indigo-400" />
+        <span className="flex items-center gap-1.5 font-semibold text-slate-300 uppercase truncate max-w-[70%]">
+          <FiTerminal className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
           {language || 'code'}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans shrink-0"
         >
           {copied ? (
             <>
@@ -64,21 +70,23 @@ const CodeBlock: React.FC<{ code: string; language: string }> = ({ code, languag
           )}
         </button>
       </div>
-      <div className="p-4 overflow-x-auto">
-        <pre className="text-xs font-mono text-indigo-100 leading-relaxed">
+      <div className="p-4 overflow-x-auto max-w-full">
+        <pre className="text-xs font-mono text-indigo-100 leading-relaxed whitespace-pre-wrap sm:whitespace-pre break-words">
           <code>{code}</code>
         </pre>
       </div>
     </div>
   );
-};
+});
+
+CodeBlock.displayName = 'CodeBlock';
 
 // Rich Markdown Text Formatter using react-markdown
-const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = ({ text, isUser = false }) => {
+const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = React.memo(({ text, isUser = false }) => {
   return (
-    <div className={`text-sm leading-relaxed max-w-none ${isUser ? 'text-white' : ''}`}>
+    <div className={`text-sm leading-relaxed max-w-full min-w-0 break-words [overflow-wrap:anywhere] ${isUser ? 'text-white' : ''}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={REMARK_PLUGINS}
         components={{
           pre({ children }) {
             return <>{children}</>;
@@ -99,7 +107,7 @@ const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = ({ text, 
 
             return (
               <code
-                className={`px-1.5 py-0.5 rounded font-mono text-[13px] border ${
+                className={`px-1.5 py-0.5 rounded font-mono text-[13px] border break-all inline-block max-w-full overflow-x-auto ${
                   isUser
                     ? 'bg-indigo-700/80 text-indigo-100 border-indigo-500/60'
                     : 'bg-slate-800/90 text-indigo-300 dark:text-indigo-200 border-slate-700/60'
@@ -111,30 +119,30 @@ const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = ({ text, 
             );
           },
           p({ children }) {
-            return <p className="leading-relaxed mb-2.5 last:mb-0">{children}</p>;
+            return <p className="leading-relaxed mb-2.5 last:mb-0 break-words [overflow-wrap:anywhere]">{children}</p>;
           },
           ul({ children }) {
-            return <ul className="list-disc list-outside pl-5 space-y-1 my-2">{children}</ul>;
+            return <ul className="list-disc list-outside pl-5 space-y-1 my-2 break-words">{children}</ul>;
           },
           ol({ children }) {
-            return <ol className="list-decimal list-outside pl-5 space-y-1 my-2">{children}</ol>;
+            return <ol className="list-decimal list-outside pl-5 space-y-1 my-2 break-words">{children}</ol>;
           },
           li({ children }) {
-            return <li className="leading-relaxed pl-0.5">{children}</li>;
+            return <li className="leading-relaxed pl-0.5 break-words">{children}</li>;
           },
           h1({ children }) {
-            return <h1 className="text-lg font-bold my-3 border-b border-slate-700/60 pb-1">{children}</h1>;
+            return <h1 className="text-lg font-bold my-3 border-b border-slate-700/60 pb-1 break-words">{children}</h1>;
           },
           h2({ children }) {
-            return <h2 className="text-base font-bold my-2.5">{children}</h2>;
+            return <h2 className="text-base font-bold my-2.5 break-words">{children}</h2>;
           },
           h3({ children }) {
-            return <h3 className="text-sm font-bold my-2">{children}</h3>;
+            return <h3 className="text-sm font-bold my-2 break-words">{children}</h3>;
           },
           blockquote({ children }) {
             return (
               <blockquote
-                className={`border-l-4 pl-3.5 py-1 my-2.5 italic rounded-r-md ${
+                className={`border-l-4 pl-3.5 py-1 my-2.5 italic rounded-r-md break-words ${
                   isUser
                     ? 'border-indigo-300 bg-indigo-700/40 text-indigo-100'
                     : 'border-indigo-500/80 bg-indigo-950/20 text-slate-300'
@@ -146,7 +154,7 @@ const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = ({ text, 
           },
           table({ children }) {
             return (
-              <div className="overflow-x-auto my-3 rounded-lg border border-slate-700/80 shadow-md">
+              <div className="overflow-x-auto max-w-full my-3 rounded-lg border border-slate-700/80 shadow-md block">
                 <table className="min-w-full divide-y divide-slate-700/80 text-left text-xs">
                   {children}
                 </table>
@@ -163,10 +171,10 @@ const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = ({ text, 
             return <tr className="hover:bg-slate-800/40 transition-colors">{children}</tr>;
           },
           th({ children }) {
-            return <th className="px-3 py-2 text-slate-200 font-semibold">{children}</th>;
+            return <th className="px-3 py-2 text-slate-200 font-semibold break-words">{children}</th>;
           },
           td({ children }) {
-            return <td className="px-3 py-2 text-slate-300 font-mono text-xs">{children}</td>;
+            return <td className="px-3 py-2 text-slate-300 font-mono text-xs break-words">{children}</td>;
           },
           a({ href, children }) {
             return (
@@ -176,7 +184,7 @@ const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = ({ text, 
                 rel="noopener noreferrer"
                 className={`${
                   isUser ? 'text-indigo-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'
-                } underline underline-offset-2 transition-colors font-medium`}
+                } underline underline-offset-2 transition-colors font-medium break-all`}
               >
                 {children}
               </a>
@@ -191,7 +199,126 @@ const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = ({ text, 
       </ReactMarkdown>
     </div>
   );
+});
+
+FormattedMessage.displayName = 'FormattedMessage';
+
+// Helper to parse thinking content vs actual response
+const parseThinkingAndResponse = (text: string) => {
+  if (!text) {
+    return { thinkingContent: null, actualResponse: '', isThinkingActive: false };
+  }
+
+  const thinkingParts: string[] = [];
+  let remainingText = text;
+  let isThinkingActive = false;
+
+  // 1. Parse <think>...</think> tags (complete or active streaming)
+  let thinkStart = remainingText.indexOf('<think>');
+  while (thinkStart !== -1) {
+    const thinkEnd = remainingText.indexOf('</think>', thinkStart);
+    if (thinkEnd !== -1) {
+      const extracted = remainingText.substring(thinkStart + 7, thinkEnd).trim();
+      if (extracted) thinkingParts.push(extracted);
+      remainingText = remainingText.substring(0, thinkStart) + remainingText.substring(thinkEnd + 8);
+    } else {
+      const extracted = remainingText.substring(thinkStart + 7).trim();
+      if (extracted) thinkingParts.push(extracted);
+      remainingText = remainingText.substring(0, thinkStart);
+      isThinkingActive = true;
+      break;
+    }
+    thinkStart = remainingText.indexOf('<think>');
+  }
+
+  // 2. Parse stringified dict thinking patterns (e.g. {'type': 'thinking', 'thinking': '...'})
+  const dictThinkingPattern = /\{['"]type['"]:\s*['"]thinking['"](?:,\s*['"](?:thinking|text|content)['"]:\s*['"]([\s\S]*?)['"])?[\s\S]*?\}/gi;
+
+  remainingText = remainingText.replace(dictThinkingPattern, (_, thinkingVal) => {
+    if (thinkingVal) {
+      const cleanVal = thinkingVal.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"').trim();
+      if (cleanVal) thinkingParts.push(cleanVal);
+    }
+    return '';
+  });
+
+  // Handle trailing partial dict string like "{'type': 'thinking', 'thinking': '..." while streaming
+  const trailingThinkingDict = /\{['"]type['"]:\s*['"]thinking['"][\s\S]*$/i;
+  if (trailingThinkingDict.test(remainingText)) {
+    isThinkingActive = true;
+    remainingText = remainingText.replace(trailingThinkingDict, (match) => {
+      const matchClean = match
+        .replace(/\{['"]type['"]:\s*['"]thinking['"],?\s*/i, '')
+        .replace(/['"](?:thinking|text|content)['"]:\s*/i, '')
+        .replace(/^['"]|['"]$/g, '')
+        .trim();
+      if (matchClean) thinkingParts.push(matchClean);
+      return '';
+    });
+  }
+
+  // 3. Handle [Thinking: ...] bracketed format
+  const altMatch = remainingText.match(/^\[Thinking:\s*([\s\S]*?)\]\n*([\s\S]*)$/i);
+  if (altMatch) {
+    thinkingParts.push(altMatch[1].trim());
+    remainingText = altMatch[2].trim();
+  }
+
+  const thinkingContent = thinkingParts.length > 0 ? thinkingParts.join('\n\n') : null;
+  const actualResponse = remainingText.trim();
+
+  return { thinkingContent, actualResponse, isThinkingActive };
 };
+
+
+// Foldable Thinking Process Component
+const FoldableThinking: React.FC<{ thinkingText: string; isActive?: boolean }> = React.memo(({ thinkingText, isActive = false }) => {
+  const [isOpen, setIsOpen] = useState(isActive);
+
+  useEffect(() => {
+    if (isActive) {
+      setIsOpen(true);
+    }
+  }, [isActive]);
+
+  return (
+    <div className="mb-3 rounded-xl border border-indigo-500/20 dark:border-indigo-900/40 bg-indigo-50/50 dark:bg-slate-900/60 overflow-hidden text-xs transition-all">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-3.5 py-2 hover:bg-indigo-100/50 dark:hover:bg-slate-800/60 transition-colors text-slate-600 dark:text-slate-300 font-medium"
+      >
+        <div className="flex items-center gap-2">
+          <div className="p-1 rounded-md bg-indigo-500/10 text-indigo-500 dark:text-indigo-400">
+            <FiCpu className={`w-3.5 h-3.5 ${isActive ? 'animate-spin' : ''}`} />
+          </div>
+          <span className="font-medium text-slate-700 dark:text-slate-200">
+            {isActive ? 'Thinking in progress...' : 'Thought Process'}
+          </span>
+          {isActive && (
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
+          <span>{isOpen ? 'Hide' : 'Show'}</span>
+          {isOpen ? <FiChevronDown className="w-3.5 h-3.5" /> : <FiChevronRight className="w-3.5 h-3.5" />}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="p-3 border-t border-indigo-500/10 dark:border-slate-800/80 bg-white/40 dark:bg-slate-950/70 text-slate-600 dark:text-slate-300 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
+          {thinkingText || <span className="italic text-slate-400">Analyzing prompt and querying NetSuite context...</span>}
+        </div>
+      )}
+    </div>
+  );
+});
+
+FoldableThinking.displayName = 'FoldableThinking';
+
+
 
 const HERO_PROMPTS = [
   {
@@ -235,12 +362,45 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
   const attachmentButtonRef = useRef<HTMLButtonElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
 
+  const isStreamingRef = useRef(false);
+  const chunkBufferRef = useRef('');
+  const rafIdRef = useRef<number | null>(null);
+
+  const flushChunkBuffer = () => {
+    if (chunkBufferRef.current) {
+      const toAppend = chunkBufferRef.current;
+      chunkBufferRef.current = '';
+      setMessages((prev) => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            text: updated[lastIdx].text + toAppend
+          };
+        }
+        return updated;
+      });
+    }
+    rafIdRef.current = null;
+  };
+
+  const scheduleChunkFlush = () => {
+    if (rafIdRef.current === null) {
+      rafIdRef.current = requestAnimationFrame(flushChunkBuffer);
+    }
+  };
+
   useEffect(() => {
     if (messageListRef.current) {
-      messageListRef.current.scrollTo({
-        top: messageListRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
+      if (isThinking || isStreamingRef.current) {
+        messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      } else {
+        messageListRef.current.scrollTo({
+          top: messageListRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
     }
   }, [messages, isThinking]);
 
@@ -263,11 +423,12 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
 
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend = customPrompt || inputValue;
-    if (textToSend.trim() === '' || isThinking) return;
+    if (textToSend.trim() === '' || isThinking || isStreamingRef.current) return;
 
     setMessages((prev) => [...prev, { text: textToSend, sender: 'user' }]);
     if (!customPrompt) setInputValue('');
     setIsThinking(true);
+    isStreamingRef.current = true;
 
     let hasReceivedChunk = false;
 
@@ -278,22 +439,19 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
           setIsThinking(false);
           setMessages((prev) => [...prev, { text: chunk, sender: 'bot' }]);
         } else {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const lastIdx = updated.length - 1;
-            if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
-              updated[lastIdx] = {
-                ...updated[lastIdx],
-                text: updated[lastIdx].text + chunk
-              };
-            }
-            return updated;
-          });
+          chunkBufferRef.current += chunk;
+          scheduleChunkFlush();
         }
       });
     } catch (err: any) {
       const errorMsg = err?.message || 'Failed to communicate with NetSuite MCP. Please check API settings.';
       setIsThinking(false);
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      flushChunkBuffer();
+
       if (!hasReceivedChunk) {
         setMessages((prev) => [...prev, { text: `⚠️ **Error**: ${errorMsg}`, sender: 'bot' }]);
       } else {
@@ -310,9 +468,16 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
         });
       }
     } finally {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      flushChunkBuffer();
       setIsThinking(false);
+      isStreamingRef.current = false;
     }
   };
+
 
   const copyMessage = (index: number, text: string) => {
     navigator.clipboard.writeText(text);
@@ -416,7 +581,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
               return (
                 <div 
                   key={index}
-                  className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : 'flex-row'} animate-slide-up group`}
+                  className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : 'flex-row'} animate-slide-up group w-full`}
                 >
                   {/* Avatar */}
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold shadow-md ${
@@ -427,16 +592,38 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                     {isUser ? <FiUser className="w-4 h-4" /> : <FiZap className="w-4 h-4" />}
                   </div>
 
-                  {/* Message Bubble */}
-                  <div className={`flex flex-col max-w-[85%] sm:max-w-[78%] ${isUser ? 'items-end' : 'items-start'}`}>
-                    <div className={`p-4 rounded-2xl shadow-sm border transition-all ${
+                  {/* Message Bubble Container */}
+                  <div className={`flex flex-col min-w-0 max-w-[85%] sm:max-w-[78%] ${isUser ? 'items-end ml-auto' : 'items-start mr-auto'}`}>
+                    <div className={`p-4 rounded-2xl shadow-sm border transition-all min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere] ${
                       isUser
                         ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-xs'
                         : isDarkMode
                           ? 'bg-slate-800/80 text-slate-100 border-slate-700/80 rounded-tl-xs'
                           : 'bg-white text-slate-800 border-slate-200 rounded-tl-xs shadow-slate-100'
                     }`}>
-                      <FormattedMessage text={message.text} isUser={isUser} />
+
+                      {!isUser ? (
+                        (() => {
+                          const { thinkingContent, actualResponse, isThinkingActive } = parseThinkingAndResponse(message.text);
+                          return (
+                            <>
+                              {(thinkingContent !== null || isThinkingActive) && (
+                                <FoldableThinking thinkingText={thinkingContent || ''} isActive={isThinkingActive} />
+                              )}
+                              {actualResponse ? (
+                                <FormattedMessage text={actualResponse} isUser={false} />
+                              ) : isThinkingActive ? (
+                                <div className="flex items-center gap-2 text-xs text-slate-400 italic font-mono py-1">
+                                  <FiCpu className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                                  Generating response...
+                                </div>
+                              ) : null}
+                            </>
+                          );
+                        })()
+                      ) : (
+                        <FormattedMessage text={message.text} isUser={true} />
+                      )}
                     </div>
 
                     {/* Action Bar (Copy Button) */}
@@ -468,22 +655,18 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
 
             {/* Thinking Indicator */}
             {isThinking && (
-              <div className="flex gap-3 sm:gap-4 animate-slide-up">
+              <div className="flex gap-3 sm:gap-4 animate-slide-up w-full">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shrink-0 shadow-md">
                   <FiZap className="w-4 h-4 animate-pulse" />
                 </div>
-                <div className={`px-4 py-3 rounded-2xl rounded-tl-xs border flex items-center gap-3 ${
-                  isDarkMode ? 'bg-slate-800/80 border-slate-700/80 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
-                }`}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce"></span>
-                    <span className="w-2 h-2 rounded-full bg-purple-500 animate-bounce [animation-delay:0.2s]"></span>
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.4s]"></span>
+                <div className="flex flex-col min-w-0 max-w-[85%] sm:max-w-[78%] mr-auto">
+                  <div className={`p-4 rounded-2xl rounded-tl-xs border min-w-0 max-w-full overflow-hidden ${
+                    isDarkMode ? 'bg-slate-800/80 border-slate-700/80 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
+                  }`}>
+                    <FoldableThinking thinkingText="Analyzing prompt and querying NetSuite MCP context..." isActive={true} />
                   </div>
-                  <span className="text-xs font-medium text-slate-400">
-                    Suite Forge AI is querying NetSuite MCP...
-                  </span>
                 </div>
+
               </div>
             )}
           </div>

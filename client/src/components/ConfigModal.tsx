@@ -21,7 +21,7 @@ import {
   FiCode,
   FiBox
 } from 'react-icons/fi';
-import NetSuiteConnector from './NetSuiteConnector';
+import { connector } from './NetSuiteConnector';
 
 interface Modelname {
   name: string;
@@ -43,8 +43,6 @@ interface ConfigModalProps {
   setInUseModelName: (inUseModelName: string | null) => void;
   onConfigSaved?: () => void;
 }
-
-const connector = new NetSuiteConnector();
 
 const ConfigModal: React.FC<ConfigModalProps> = ({ 
   onClose, 
