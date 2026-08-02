@@ -233,7 +233,7 @@ def chat(body: ChatRequest):
     async def event_generator():
         full_response = ""
         try:
-            async for token in ai_service.stream_chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model):
+            async for token in ai_service.stream_chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model, session_id=session_id):
                 full_response += token
                 payload = json.dumps({"type": "token", "token": token})
                 yield f"data: {payload}\n\n"

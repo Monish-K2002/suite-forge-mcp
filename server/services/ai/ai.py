@@ -6,48 +6,87 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.messages import SystemMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain.agents import create_agent
+from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.runnables import RunnableConfig
 from services.db.database import DatabaseManager
+import ast
 
-logging.basicConfig(
-    filename="ai.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    filemode="a"
-)
+# logging.basicConfig(
+#     filename="ai.log",
+#     level=logging.ERROR,
+#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+#     filemode="a"
+# )
 logger = logging.getLogger(__name__)
 
-sys_message = SystemMessage(
-    """
-    You are a helpful NetSuite Assistant. You help users with their NetSuite tasks.
-    """
-)
+system_prompt = """
+    You are a NetSuite Expert Solution provider. 
+    You help users with their NetSuite related questions.
+    Refer to Oracle Docs for Suitescript related queries.
+"""
 
+
+
+def is_tool_payload_str(text_str: str) -> bool:
+    keywords = ['"method"', "'method'", '"success"', "'success'", '"error"', "'error'", '"params"', "'params'"]
+    return any(kw in text_str for kw in keywords)
 
 def extract_text_content(content: Any) -> str:
     """Normalize LangChain provider content into displayable text."""
     if content is None:
         return ""
     if isinstance(content, str):
+        content_str = content.strip()
+        if (content_str.startswith("[") and content_str.endswith("]")) or (content_str.startswith("{") and content_str.endswith("}")):
+            try:
+                parsed = ast.literal_eval(content_str)
+                return extract_text_content(parsed)
+            except Exception:
+                pass
         return content
+
     if isinstance(content, list):
         parts = []
         for item in content:
             if isinstance(item, dict):
                 item_type = item.get("type", "")
+                text_val = item.get("text")
                 if item_type == "thinking" or "thinking" in item:
-                    think_text = item.get("thinking") or item.get("text") or item.get("content") or ""
+                    think_text = item.get("thinking") or text_val or item.get("content") or ""
                     if think_text:
                         parts.append(f"<think>{think_text}</think>")
-                else:
-                    text_val = item.get("text")
-                    if text_val is not None:
-                        parts.append(str(text_val))
+                elif text_val is not None:
+                    text_str = str(text_val)
+                    if "method" in item or "success" in item or "error" in item or is_tool_payload_str(text_str):
+                        parts.append(f"<think>Tool Payload: {text_str}</think>")
                     else:
-                        parts.append(str(item))
+                        parts.append(text_str)
+                elif "method" in item or "success" in item or "error" in item:
+                    parts.append(f"<think>Tool Payload: {str(item)}</think>")
+                elif "content" in item and isinstance(item["content"], (str, list, dict)):
+                    parts.append(extract_text_content(item["content"]))
+                else:
+                    parts.append(str(item))
             else:
-                parts.append(str(item))
+                parts.append(extract_text_content(item))
         return "".join(parts)
+
+    if isinstance(content, dict):
+        item_type = content.get("type", "")
+        text_val = content.get("text")
+        if item_type == "thinking" or "thinking" in content:
+            think_text = content.get("thinking") or text_val or content.get("content") or ""
+            return f"<think>{think_text}</think>" if think_text else ""
+        if "method" in content or "success" in content or "error" in content or (text_val and is_tool_payload_str(str(text_val))):
+            return f"<think>Tool Payload: {text_val or str(content)}</think>"
+        if text_val is not None:
+            return str(text_val)
+        if "content" in content:
+            return extract_text_content(content["content"])
+
     return str(content)
+
+
 
 
 
@@ -113,6 +152,9 @@ class AIService:
         self._providers: Dict[str, BaseLLMProvider] = {
             "google": GoogleLLMProvider()
         }
+        self.llm = None
+        self.agent = None
+        self.session_id = None
 
     def register_provider(self, name: str, provider: BaseLLMProvider):
         """Register a new LLM provider."""
@@ -173,51 +215,39 @@ class AIService:
         if not api_provider or not api_key or not model_name:
             raise ValueError("Provider, API Key, and Model Name are required to initialize LLM")
         provider = self._get_provider(api_provider)
-        return provider.create_llm_instance(api_key, model_name)
+        self.llm = provider.create_llm_instance(api_key, model_name)
 
-    def chat(self, message: str, api_provider: str, api_key: str, model_name: str) -> str:
-        if not message or not message.strip():
-            return "Please provide a non-empty message."
-            
-        try:
-            llm = self.create_llm_instance(api_provider, api_key, model_name)
-            response = llm.invoke(message)
-            response_text = extract_message_text(response)
+    def create_agent_instance(self):
+        if not self.llm:
+            raise ValueError("LLM instance is required to create agent")
+        if not self.tools:
+            self.tools = []
+        self.agent = create_agent(model=self.llm, tools=self.tools, system_prompt=system_prompt, checkpointer=InMemorySaver())
 
-            logger.debug(f"AI response generated successfully for model {model_name}")
-            return response_text
-        except Exception as e:
-            logger.error(f"Error in chat service: {e}")
-            raise RuntimeError(f"AI Service Execution Error: {str(e)}")
 
-    async def stream_chat(self, message: str, api_provider: str, api_key: str, model_name: str):
+    async def stream_chat(self, message: str, api_provider: str, api_key: str, model_name: str, session_id: str = None):
         if not message or not message.strip():
             yield "Please provide a non-empty message."
             return
 
         try:
-            await self.init_tools()
+            if not self.tools:
+                await self.init_tools()
         except Exception as e:
             logger.warning(f"Failed to initialize tools: {e}")
 
         try:
-            llm = self.create_llm_instance(api_provider, api_key, model_name)
-            system_prompt = """
-            You are a NetSuite Expert Solution provider. 
-            You help users with their NetSuite related questions.
-            Refer to Oracle Docs for Suitescript related queries.
-            """
-            if create_agent:
-                if getattr(self, 'tools', None):
-                    agent = create_agent(model=llm, tools=self.tools, system_prompt=system_prompt)
-                else:
-                    agent = create_agent(model=llm, system_prompt=system_prompt)
-                async for event in agent.astream({"messages": [("user", message)]}, stream_mode="messages"):
+            if not self.session_id or self.session_id != session_id:
+                self.session_id = session_id
+            if not self.llm:
+                self.create_llm_instance(api_provider, api_key, model_name)
+            if not self.agent:
+                self.create_agent_instance()
+            config = {"configurable": {"thread_id": self.session_id}}
+            if self.agent:
+                async for event in self.agent.astream({"messages": [("user", message)]}, stream_mode="messages", config=config):
                     chunk, _ = event
-                    # print("chunk:", chunk)
-                    logger.info(f"chunk: {chunk}")
                     text = extract_message_text(chunk)
-                    # print("text:", text)
                     if text:
                         yield text
             else:

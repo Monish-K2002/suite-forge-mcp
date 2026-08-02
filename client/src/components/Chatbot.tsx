@@ -231,9 +231,8 @@ const parseThinkingAndResponse = (text: string) => {
     thinkStart = remainingText.indexOf('<think>');
   }
 
-  // 2. Parse stringified dict thinking patterns (e.g. {'type': 'thinking', 'thinking': '...'})
+  // 2. Parse stringified dict thinking patterns (e.g. {'type': 'thinking', ...})
   const dictThinkingPattern = /\{['"]type['"]:\s*['"]thinking['"](?:,\s*['"](?:thinking|text|content)['"]:\s*['"]([\s\S]*?)['"])?[\s\S]*?\}/gi;
-
   remainingText = remainingText.replace(dictThinkingPattern, (_, thinkingVal) => {
     if (thinkingVal) {
       const cleanVal = thinkingVal.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"').trim();
@@ -242,7 +241,7 @@ const parseThinkingAndResponse = (text: string) => {
     return '';
   });
 
-  // Handle trailing partial dict string like "{'type': 'thinking', 'thinking': '..." while streaming
+  // Handle trailing partial dict string like "{'type': 'thinking', ..." while streaming
   const trailingThinkingDict = /\{['"]type['"]:\s*['"]thinking['"][\s\S]*$/i;
   if (trailingThinkingDict.test(remainingText)) {
     isThinkingActive = true;
@@ -257,12 +256,50 @@ const parseThinkingAndResponse = (text: string) => {
     });
   }
 
-  // 3. Handle [Thinking: ...] bracketed format
+  // 3. Parse stringified text dict patterns, e.g. [{'type': 'text', 'text': '{"success":false,"error":...}'}] or {'type': 'text', 'text': '...'}
+  const isToolPayload = (str: string) => /"method"|'method'|"success"|'success'|"error"|'error'|"params"|'params'|"result"|'result'/i.test(str);
+
+  const dictTextPattern = /\{['"]type['"]:\s*['"]text['"][\s\S]*?['"]text['"]:\s*['"]([\s\S]*?)['"][\s\S]*?\}/gi;
+  remainingText = remainingText.replace(dictTextPattern, (_, innerText) => {
+    if (!innerText) return '';
+    const cleanInner = innerText.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"').trim();
+    if (isToolPayload(cleanInner)) {
+      thinkingParts.push(`Tool Payload: ${cleanInner}`);
+      return '';
+    }
+    return cleanInner;
+  });
+
+  // Handle full array wrappers like [{'type': 'text', 'text': '...'}]
+  const fullArrayPattern = /\[?\s*\{['"]type['"]:\s*['"]text['"][\s\S]*?\}?\s*\]?/gi;
+  remainingText = remainingText.replace(fullArrayPattern, (fullMatch) => {
+    const textMatch = fullMatch.match(/['"]text['"]:\s*['"]([\s\S]*?)['"]/i);
+    if (textMatch && textMatch[1]) {
+      const cleanVal = textMatch[1].replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"').trim();
+      if (isToolPayload(cleanVal)) {
+        thinkingParts.push(`Tool Payload: ${cleanVal}`);
+        return '';
+      }
+      return cleanVal;
+    }
+    return '';
+  });
+
+  // 4. Handle any raw tool result strings like {"success":false,"error":...} or {"method":...} in text
+  const rawToolPayloadPattern = /\{['"](?:method|success|error|result)['"]:\s*[\s\S]*?\}/gi;
+  remainingText = remainingText.replace(rawToolPayloadPattern, (payloadMatch) => {
+    thinkingParts.push(`Tool Payload: ${payloadMatch.trim()}`);
+    return '';
+  });
+
+  // 5. Handle [Thinking: ...] bracketed format
   const altMatch = remainingText.match(/^\[Thinking:\s*([\s\S]*?)\]\n*([\s\S]*)$/i);
   if (altMatch) {
     thinkingParts.push(altMatch[1].trim());
     remainingText = altMatch[2].trim();
   }
+
+
 
   const thinkingContent = thinkingParts.length > 0 ? thinkingParts.join('\n\n') : null;
   const actualResponse = remainingText.trim();
