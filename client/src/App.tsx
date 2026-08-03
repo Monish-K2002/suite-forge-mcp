@@ -8,7 +8,7 @@ import { connector } from './components/NetSuiteConnector';
 export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState('default');
-  const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot' }[]>([]);
+  const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot'; tokens?: number }[]>([]);
   const [savedSessions, setSavedSessions] = useState<HistoryItem[]>([]);
 
   const loadSessions = async (accId?: string) => {
@@ -58,7 +58,7 @@ export default function App() {
         setMessages([]);
       }
     } catch (e) {
-      console.error('Error loading account and chat data:', e);
+      console.error('Error loading account and data:', e);
     }
   };
 
@@ -84,15 +84,17 @@ export default function App() {
     fetchSessionData();
   }, [activeSessionId]);
 
-  const handleSendMessage = async (message: string, onChunk?: (chunk: string) => void): Promise<string> => {
+  const handleSendMessage = async (
+    message: string, 
+    onChunk?: (chunk: string) => void
+  ): Promise<{ response: string; total_tokens?: number }> => {
     const result = await connector.sendMessage(message, activeSessionId, onChunk);
-    const response = typeof result === 'string' ? result : result.response;
     
     // Refresh sessions list after message save for active account
     const config = await connector.getConfig().catch(() => ({ netsuite_account_id: '' }));
     loadSessions(config.netsuite_account_id || '');
     
-    return response;
+    return result;
   };
 
   const toggleHistory = () => {

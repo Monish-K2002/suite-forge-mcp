@@ -13,7 +13,7 @@ import ast
 
 # logging.basicConfig(
 #     filename="ai.log",
-#     level=logging.ERROR,
+#     level=logging.INFO,
 #     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 #     filemode="a"
 # )
@@ -23,6 +23,7 @@ system_prompt = """
     You are a NetSuite Expert Solution provider. 
     You help users with their NetSuite related questions.
     Refer to Oracle Docs for Suitescript related queries.
+    If the question is not related to netsuite then return that it is outside your scope.
 """
 
 
@@ -87,14 +88,24 @@ def extract_text_content(content: Any) -> str:
     return str(content)
 
 
-
-
-
-def extract_message_text(message: Any) -> str:
-    """Normalize provider message/chunk objects into text."""
+def extract_message_text(message: Any) -> tuple:
+    """Normalize provider message/chunk objects into text and token count tuple."""
     if hasattr(message, "content"):
-        return extract_text_content(message.content)
-    return extract_text_content(message)
+        text = extract_text_content(message.content)
+    else:
+        text = extract_text_content(message)
+
+    tokens = 0
+    usage = None
+    if hasattr(message, "usage_metadata") and message.usage_metadata:
+        usage = message.usage_metadata
+    elif isinstance(message, dict) and "usage_metadata" in message:
+        usage = message.get("usage_metadata")
+
+    if isinstance(usage, dict):
+        tokens = usage.get("total_tokens", 0) or usage.get("output_tokens", 0) or 0
+
+    return text, tokens
 
 
 class BaseLLMProvider(ABC):
@@ -227,7 +238,7 @@ class AIService:
 
     async def stream_chat(self, message: str, api_provider: str, api_key: str, model_name: str, session_id: str = None):
         if not message or not message.strip():
-            yield "Please provide a non-empty message."
+            yield "Please provide a non-empty message.", 0
             return
 
         try:
@@ -237,6 +248,7 @@ class AIService:
             logger.warning(f"Failed to initialize tools: {e}")
 
         try:
+            logger.info(f"Session ID: {session_id}")
             if not self.session_id or self.session_id != session_id:
                 self.session_id = session_id
             if not self.llm:
@@ -247,20 +259,20 @@ class AIService:
             if self.agent:
                 async for event in self.agent.astream({"messages": [("user", message)]}, stream_mode="messages", config=config):
                     chunk, _ = event
-                    text = extract_message_text(chunk)
-                    if text:
-                        yield text
+                    text, total_tokens = extract_message_text(chunk)
+                    if text or total_tokens:
+                        yield text, total_tokens
             else:
-                if hasattr(llm, 'astream'):
-                    async for chunk in llm.astream(message):
-                        text = extract_message_text(chunk)
-                        if text:
-                            yield text
+                if hasattr(self.llm, 'astream'):
+                    async for chunk in self.llm.astream(message):
+                        text, total_tokens = extract_message_text(chunk)
+                        if text or total_tokens:
+                            yield text, total_tokens
                 else:
-                    for chunk in llm.stream(message):
-                        text = extract_message_text(chunk)
-                        if text:
-                                yield text
+                    for chunk in self.llm.stream(message):
+                        text, total_tokens = extract_message_text(chunk)
+                        if text or total_tokens:
+                            yield text, total_tokens
             logger.debug(f"AI streaming completed successfully for model {model_name}")
         except Exception as e:
             logger.error(f"Error in stream_chat service: {e}")

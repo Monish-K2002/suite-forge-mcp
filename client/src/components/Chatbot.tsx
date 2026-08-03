@@ -28,13 +28,13 @@ import {
 import { useDarkMode } from '../contexts/DarkModeContext';
 
 interface ChatbotProps {
-  onSendMessage: (message: string, onChunk?: (chunk: string) => void) => Promise<string>;
+  onSendMessage: (message: string, onChunk?: (chunk: string) => void) => Promise<{ response: string; total_tokens?: number } | any>;
   toggleHistory: () => void;
-  messages: { text: string; sender: 'user' | 'bot' }[];
+  messages: { text: string; sender: 'user' | 'bot'; tokens?: number }[];
   setMessages: (
     messages: 
-      | { text: string; sender: 'user' | 'bot' }[]
-      | ((prevMessages: { text: string; sender: 'user' | 'bot' }[]) => { text: string; sender: 'user' | 'bot' }[])
+      | { text: string; sender: 'user' | 'bot'; tokens?: number }[]
+      | ((prevMessages: { text: string; sender: 'user' | 'bot'; tokens?: number }[]) => { text: string; sender: 'user' | 'bot'; tokens?: number }[])
   ) => void;
 }
 
@@ -579,7 +579,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
     let hasReceivedChunk = false;
 
     try {
-      await onSendMessage(textToSend, (chunk: string) => {
+      const result = await onSendMessage(textToSend, (chunk: string) => {
         if (!hasReceivedChunk) {
           hasReceivedChunk = true;
           setIsThinking(false);
@@ -589,6 +589,20 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
           scheduleChunkFlush();
         }
       });
+
+      if (result && typeof result === 'object' && result.total_tokens !== undefined) {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
+            updated[lastIdx] = {
+              ...updated[lastIdx],
+              tokens: result.total_tokens
+            };
+          }
+          return updated;
+        });
+      }
     } catch (err: any) {
       const errorMsg = err?.message || 'Failed to communicate with NetSuite MCP. Please check API settings.';
       setIsThinking(false);
@@ -840,8 +854,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                         )}
                       </div>
 
-                      {/* Action Bar (Copy Button) */}
-                      <div className={`mt-1 flex items-center gap-2 text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity px-1 ${
+                      {/* Action Bar (Copy Button & Token Counter) */}
+                      <div className={`mt-1 flex items-center gap-3 text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity px-1 ${
                         isUser ? 'justify-end' : 'justify-start'
                       }`}>
                         <button
@@ -861,6 +875,13 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                             </>
                           )}
                         </button>
+
+                        {!isUser && message.tokens !== undefined && message.tokens > 0 && (
+                          <span className="flex items-center gap-1 font-mono text-[10px] text-slate-400 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-300/80 dark:border-slate-700/60 shadow-xs">
+                            <FiCpu className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
+                            {message.tokens} tokens
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

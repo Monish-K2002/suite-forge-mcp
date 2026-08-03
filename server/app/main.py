@@ -232,10 +232,12 @@ def chat(body: ChatRequest):
 
     async def event_generator():
         full_response = ""
+        total_tokens = 0
         try:
-            async for token in ai_service.stream_chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model, session_id=session_id):
+            async for token, tokens in ai_service.stream_chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model, session_id=session_id):
                 full_response += token
-                payload = json.dumps({"type": "token", "token": token})
+                total_tokens += tokens
+                payload = json.dumps({"type": "token", "token": token, "total_tokens": total_tokens})
                 yield f"data: {payload}\n\n"
 
             # Save AI response to SQLite DB upon completion
@@ -251,7 +253,8 @@ def chat(body: ChatRequest):
                 "type": "done",
                 "response": full_response,
                 "user_message": user_msg,
-                "ai_message": ai_msg
+                "ai_message": ai_msg,
+                "total_tokens": total_tokens
             })
             yield f"data: {done_payload}\n\n"
         except Exception as e:

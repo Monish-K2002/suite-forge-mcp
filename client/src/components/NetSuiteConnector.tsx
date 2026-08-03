@@ -37,7 +37,7 @@ export class NetSuiteConnector {
     message: string, 
     sessionId: string = 'default',
     onChunk?: (chunk: string) => void
-  ): Promise<{ response: string; user_message?: any; ai_message?: any }> {
+  ): Promise<{ response: string; user_message?: any; ai_message?: any; total_tokens?: number }> {
     try {
       const response = await fetch(`${this.apiEndpoint}/chat`, {
         method: "POST",
@@ -59,6 +59,7 @@ export class NetSuiteConnector {
         if (onChunk && data.response) {
           onChunk(data.response);
         }
+        console.log('(contentType.includes("application/json"))', data);
         return {
           response: data.response || "No response received from AI service.",
           user_message: data.user_message,
@@ -127,7 +128,8 @@ export class NetSuiteConnector {
       return {
         response: fullResponse || doneData?.response || "",
         user_message: doneData?.user_message,
-        ai_message: doneData?.ai_message
+        ai_message: doneData?.ai_message,
+        total_tokens: doneData?.total_tokens,
       };
     } catch (error: any) {
       console.error("NetSuite AI Connector Error:", error);
