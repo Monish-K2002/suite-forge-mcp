@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   FiSend, 
@@ -88,7 +90,19 @@ class MessageRenderBoundary extends React.Component<
   }
 }
 
-// Formatted Code Block Component with Copy Button
+const normalizeLanguageForHighlight = (language: string) => {
+  if (!language) return 'text';
+  const lower = language.toLowerCase().trim();
+  if (['js', 'suitescript', 'node'].includes(lower)) return 'javascript';
+  if (['ts'].includes(lower)) return 'typescript';
+  if (['suiteql'].includes(lower)) return 'sql';
+  if (['sh', 'zsh', 'terminal', 'cmd'].includes(lower)) return 'bash';
+  if (['py'].includes(lower)) return 'python';
+  if (['yml'].includes(lower)) return 'yaml';
+  return lower;
+};
+
+// Formatted Code Block Component with Copy Button and Syntax Highlighting
 const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ code, language }) => {
   const [copied, setCopied] = useState(false);
 
@@ -102,6 +116,8 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
     const ext = extensionForLanguage(language || 'code');
     downloadTextFile(code, `suite-forge-snippet.${ext}`);
   };
+
+  const highlightLang = normalizeLanguageForHighlight(language);
 
   return (
     <div className="my-3 rounded-xl border border-slate-700/80 bg-slate-950 overflow-hidden shadow-lg max-w-full min-w-0">
@@ -139,10 +155,27 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
           </button>
         </div>
       </div>
-      <div className="p-4 overflow-x-auto max-w-full">
-        <pre className="text-xs font-mono text-indigo-100 leading-relaxed whitespace-pre-wrap sm:whitespace-pre break-words">
-          <code>{code}</code>
-        </pre>
+      <div className="overflow-x-auto max-w-full text-xs font-mono">
+        <SyntaxHighlighter
+          language={highlightLang}
+          style={vscDarkPlus}
+          customStyle={{
+            margin: 0,
+            padding: '1rem',
+            background: 'transparent',
+            fontSize: '0.8125rem',
+            lineHeight: '1.6',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+          }}
+          codeTagProps={{
+            style: {
+              fontFamily: 'inherit',
+            },
+          }}
+          PreTag="div"
+        >
+          {code}
+        </SyntaxHighlighter>
       </div>
     </div>
   );
