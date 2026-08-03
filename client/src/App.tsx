@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Chatbot from './components/Chatbot';
 import HistoryPanel from './components/HistoryPanel';
 import type { HistoryItem } from './components/HistoryPanel';
-import NetSuiteConnector, { connector } from './components/NetSuiteConnector';
+import { connector } from './components/NetSuiteConnector';
 
 
 export default function App() {
@@ -105,6 +105,31 @@ export default function App() {
     setMessages([]);
   };
 
+  useEffect(() => {
+    const handleGlobalShortcuts = (event: KeyboardEvent) => {
+      const isModKey = event.ctrlKey || event.metaKey;
+
+      if (isModKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setShowHistory(true);
+        window.dispatchEvent(new CustomEvent('suite_forge_focus_history_search'));
+      }
+
+      if (isModKey && event.shiftKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        handleNewChat();
+        setShowHistory(false);
+      }
+
+      if (event.key === 'Escape') {
+        setShowHistory(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, []);
+
   const handleSelectSession = (sessionId: string) => {
     setActiveSessionId(sessionId);
   };
@@ -175,4 +200,4 @@ export default function App() {
 }
 
 
-
+

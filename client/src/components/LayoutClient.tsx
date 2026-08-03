@@ -1,8 +1,9 @@
 
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import Navbar from './Navbar';
-import ConfigModal from './ConfigModal';
+
+const ConfigModal = lazy(() => import('./ConfigModal'));
 
 interface Modelname {
   name: string;
@@ -50,21 +51,23 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
       </div>
 
       {showConfigModal && (
-        <ConfigModal 
-          onClose={() => setShowConfigModal(false)} 
-          isDarkMode={isDarkMode} 
-          modelList={modelList} 
-          setModelList={setModelList} 
-          apiProvider={apiProvider}
-          setApiProvider={setApiProvider}
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          inUseModelName={inUseModelName}
-          setInUseModelName={setInUseModelName}
-          onConfigSaved={handleRefreshStatus}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md" />}>
+          <ConfigModal 
+            onClose={() => setShowConfigModal(false)} 
+            isDarkMode={isDarkMode} 
+            modelList={modelList} 
+            setModelList={setModelList} 
+            apiProvider={apiProvider}
+            setApiProvider={setApiProvider}
+            apiKey={apiKey}
+            setApiKey={setApiKey}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            inUseModelName={inUseModelName}
+            setInUseModelName={setInUseModelName}
+            onConfigSaved={handleRefreshStatus}
+          />
+        </Suspense>
       )}
     </div>
   );

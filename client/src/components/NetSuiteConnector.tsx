@@ -119,7 +119,7 @@ export class NetSuiteConnector {
           } else if (parsed.type === "error") {
             throw new Error(parsed.error);
           }
-        } catch (e) {
+        } catch {
           // ignore incomplete trailing chunk
         }
       }
@@ -295,7 +295,7 @@ export class NetSuiteConnector {
     if (!response.ok) {
       throw new Error("Failed to fetch tools list.");
     }
-    const data = await response.json();
+    return await response.json();
   }
 }
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   FiSend, 
   FiPlus, 
@@ -18,7 +19,8 @@ import {
   FiTerminal,
   FiCpu,
   FiChevronDown,
-  FiChevronRight
+  FiChevronRight,
+  FiDownload
 } from 'react-icons/fi';
 
 import { useDarkMode } from '../contexts/DarkModeContext';
@@ -36,6 +38,56 @@ interface ChatbotProps {
 
 const REMARK_PLUGINS = [remarkGfm];
 
+const downloadTextFile = (content: string, filename: string, mimeType = 'text/plain;charset=utf-8') => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+const extensionForLanguage = (language: string) => {
+  const normalized = language.toLowerCase();
+  if (['js', 'javascript', 'suitescript'].includes(normalized)) return 'js';
+  if (['ts', 'typescript'].includes(normalized)) return 'ts';
+  if (['sql', 'suiteql'].includes(normalized)) return 'sql';
+  if (['json'].includes(normalized)) return 'json';
+  if (['html'].includes(normalized)) return 'html';
+  if (['css'].includes(normalized)) return 'css';
+  return 'txt';
+};
+
+class MessageRenderBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('Message render failed:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-medium text-rose-600 dark:text-rose-300">
+          This message could not be rendered safely. Use copy/export to inspect the raw response.
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // Formatted Code Block Component with Copy Button
 const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ code, language }) => {
   const [copied, setCopied] = useState(false);
@@ -46,6 +98,11 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownload = () => {
+    const ext = extensionForLanguage(language || 'code');
+    downloadTextFile(code, `suite-forge-snippet.${ext}`);
+  };
+
   return (
     <div className="my-3 rounded-xl border border-slate-700/80 bg-slate-950 overflow-hidden shadow-lg max-w-full min-w-0">
       <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800 text-slate-400 text-xs font-mono">
@@ -53,22 +110,34 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
           <FiTerminal className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
           {language || 'code'}
         </span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans shrink-0"
-        >
-          {copied ? (
-            <>
-              <FiCheck className="w-3 h-3 text-emerald-400" />
-              <span className="text-emerald-400 font-medium">Copied!</span>
-            </>
-          ) : (
-            <>
-              <FiCopy className="w-3 h-3" />
-              <span>Copy Code</span>
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans"
+            title="Download code snippet"
+            aria-label="Download code snippet"
+          >
+            <FiDownload className="w-3 h-3" />
+            <span className="hidden sm:inline">Download</span>
+          </button>
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans"
+            aria-label="Copy code snippet"
+          >
+            {copied ? (
+              <>
+                <FiCheck className="w-3 h-3 text-emerald-400" />
+                <span className="text-emerald-400 font-medium">Copied</span>
+              </>
+            ) : (
+              <>
+                <FiCopy className="w-3 h-3" />
+                <span>Copy</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
       <div className="p-4 overflow-x-auto max-w-full">
         <pre className="text-xs font-mono text-indigo-100 leading-relaxed whitespace-pre-wrap sm:whitespace-pre break-words">
@@ -323,6 +392,7 @@ const FoldableThinking: React.FC<{ thinkingText: string; isActive?: boolean }> =
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between px-3.5 py-2 hover:bg-indigo-100/50 dark:hover:bg-slate-800/60 transition-colors text-slate-600 dark:text-slate-300 font-medium"
+        aria-expanded={isOpen}
       >
         <div className="flex items-center gap-2">
           <div className="p-1 rounded-md bg-indigo-500/10 text-indigo-500 dark:text-indigo-400">
@@ -402,6 +472,16 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
   const isStreamingRef = useRef(false);
   const chunkBufferRef = useRef('');
   const rafIdRef = useRef<number | null>(null);
+  const virtualRowCount = messages.length + (isThinking ? 1 : 0);
+  const messageVirtualizer = useVirtualizer({
+    count: virtualRowCount,
+    getScrollElement: () => messageListRef.current,
+    estimateSize: (index) => {
+      if (index >= messages.length) return 96;
+      return messages[index].sender === 'user' ? 120 : 220;
+    },
+    overscan: 6,
+  });
 
   const flushChunkBuffer = () => {
     if (chunkBufferRef.current) {
@@ -429,17 +509,13 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
   };
 
   useEffect(() => {
-    if (messageListRef.current) {
-      if (isThinking || isStreamingRef.current) {
-        messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-      } else {
-        messageListRef.current.scrollTo({
-          top: messageListRef.current.scrollHeight,
-          behavior: 'smooth'
-        });
-      }
-    }
-  }, [messages, isThinking]);
+    if (virtualRowCount === 0) return;
+
+    messageVirtualizer.scrollToIndex(virtualRowCount - 1, {
+      align: 'end',
+      behavior: isThinking || isStreamingRef.current ? 'auto' : 'smooth'
+    });
+  }, [messages, isThinking, messageVirtualizer, virtualRowCount]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -490,7 +566,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
       flushChunkBuffer();
 
       if (!hasReceivedChunk) {
-        setMessages((prev) => [...prev, { text: `⚠️ **Error**: ${errorMsg}`, sender: 'bot' }]);
+        setMessages((prev) => [...prev, { text: `Warning: **Error**: ${errorMsg}`, sender: 'bot' }]);
       } else {
         setMessages((prev) => {
           const updated = [...prev];
@@ -498,7 +574,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
           if (lastIdx >= 0 && updated[lastIdx].sender === 'bot') {
             updated[lastIdx] = {
               ...updated[lastIdx],
-              text: updated[lastIdx].text + `\n\n⚠️ **Error**: ${errorMsg}`
+              text: updated[lastIdx].text + `\n\nWarning: **Error**: ${errorMsg}`
             };
           }
           return updated;
@@ -528,6 +604,22 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
     }
   };
 
+  const handleExportChat = () => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const transcript = messages
+      .map((message) => {
+        const label = message.sender === 'user' ? 'User' : 'Assistant';
+        return `## ${label}\n\n${message.text.trim() || '_Empty message_'}`;
+      })
+      .join('\n\n---\n\n');
+
+    downloadTextFile(
+      `# Suite Forge Conversation\n\nExported: ${new Date().toLocaleString()}\n\n${transcript}\n`,
+      `suite-forge-conversation-${timestamp}.md`,
+      'text/markdown;charset=utf-8'
+    );
+  };
+
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 w-full relative overflow-hidden">
       {/* Top Action Subheader */}
@@ -544,6 +636,16 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
         </div>
 
         <div className="flex items-center gap-2">
+          {messages.length > 0 && (
+            <button
+              onClick={handleExportChat}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-slate-500 hover:bg-slate-200/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 transition-colors font-medium"
+              title="Export active conversation as Markdown"
+            >
+              <FiDownload className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               onClick={handleClearChat}
@@ -612,100 +714,126 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
           </div>
         ) : (
           /* Message List */
-          <div className="max-w-4xl mx-auto space-y-6">
-            {messages.map((message, index) => {
-              const isUser = message.sender === 'user';
-              return (
-                <div 
-                  key={index}
-                  className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : 'flex-row'} animate-slide-up group w-full`}
-                >
-                  {/* Avatar */}
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold shadow-md ${
-                    isUser 
-                      ? 'bg-slate-700 text-white' 
-                      : 'bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white'
-                  }`}>
-                    {isUser ? <FiUser className="w-4 h-4" /> : <FiZap className="w-4 h-4" />}
+          <div
+            className="max-w-4xl mx-auto relative"
+            style={{ height: `${messageVirtualizer.getTotalSize()}px` }}
+          >
+            {messageVirtualizer.getVirtualItems().map((virtualRow) => {
+              const index = virtualRow.index;
+              const isThinkingRow = index >= messages.length;
+
+              if (isThinkingRow) {
+                return (
+                  <div
+                    key="thinking-indicator"
+                    ref={messageVirtualizer.measureElement}
+                    data-index={index}
+                    className="absolute left-0 top-0 w-full pb-6"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <div className="flex gap-3 sm:gap-4 animate-slide-up w-full">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shrink-0 shadow-md">
+                        <FiZap className="w-4 h-4 animate-pulse" />
+                      </div>
+                      <div className="flex flex-col min-w-0 max-w-[85%] sm:max-w-[78%] mr-auto">
+                        <div className={`p-4 rounded-2xl rounded-tl-xs border min-w-0 max-w-full overflow-hidden ${
+                          isDarkMode ? 'bg-slate-800/80 border-slate-700/80 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
+                        }`}>
+                          <FoldableThinking thinkingText="Analyzing prompt and querying NetSuite MCP context..." isActive={true} />
+                        </div>
+                      </div>
+                    </div>
                   </div>
+                );
+              }
 
-                  {/* Message Bubble Container */}
-                  <div className={`flex flex-col min-w-0 max-w-[85%] sm:max-w-[78%] ${isUser ? 'items-end ml-auto' : 'items-start mr-auto'}`}>
-                    <div className={`p-4 rounded-2xl shadow-sm border transition-all min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere] ${
+              const message = messages[index];
+              const isUser = message.sender === 'user';
+
+              return (
+                <div
+                  key={`${message.sender}-${index}`}
+                  ref={messageVirtualizer.measureElement}
+                  data-index={index}
+                  className="absolute left-0 top-0 w-full pb-6"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  <div className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : 'flex-row'} animate-slide-up group w-full`}>
+                    {/* Avatar */}
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold shadow-md ${
                       isUser
-                        ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-xs'
-                        : isDarkMode
-                          ? 'bg-slate-800/80 text-slate-100 border-slate-700/80 rounded-tl-xs'
-                          : 'bg-white text-slate-800 border-slate-200 rounded-tl-xs shadow-slate-100'
+                        ? 'bg-slate-700 text-white'
+                        : 'bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white'
                     }`}>
-
-                      {!isUser ? (
-                        (() => {
-                          const { thinkingContent, actualResponse, isThinkingActive } = parseThinkingAndResponse(message.text);
-                          return (
-                            <>
-                              {(thinkingContent !== null || isThinkingActive) && (
-                                <FoldableThinking thinkingText={thinkingContent || ''} isActive={isThinkingActive} />
-                              )}
-                              {actualResponse ? (
-                                <FormattedMessage text={actualResponse} isUser={false} />
-                              ) : isThinkingActive ? (
-                                <div className="flex items-center gap-2 text-xs text-slate-400 italic font-mono py-1">
-                                  <FiCpu className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-                                  Generating response...
-                                </div>
-                              ) : null}
-                            </>
-                          );
-                        })()
-                      ) : (
-                        <FormattedMessage text={message.text} isUser={true} />
-                      )}
+                      {isUser ? <FiUser className="w-4 h-4" /> : <FiZap className="w-4 h-4" />}
                     </div>
 
-                    {/* Action Bar (Copy Button) */}
-                    <div className={`mt-1 flex items-center gap-2 text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity px-1 ${
-                      isUser ? 'justify-end' : 'justify-start'
-                    }`}>
-                      <button
-                        onClick={() => copyMessage(index, message.text)}
-                        className="hover:text-slate-200 transition-colors flex items-center gap-1"
-                        title="Copy message content"
+                    {/* Message Bubble Container */}
+                    <div className={`flex flex-col min-w-0 max-w-[85%] sm:max-w-[78%] ${isUser ? 'items-end ml-auto' : 'items-start mr-auto'}`}>
+                      <div
+                        className={`p-4 rounded-2xl shadow-sm border transition-all min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere] ${
+                        isUser
+                          ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-xs'
+                          : isDarkMode
+                            ? 'bg-slate-800/80 text-slate-100 border-slate-700/80 rounded-tl-xs'
+                            : 'bg-white text-slate-800 border-slate-200 rounded-tl-xs shadow-slate-100'
+                      }`}
+                        aria-live={isUser ? undefined : 'polite'}
                       >
-                        {copiedMsgIdx === index ? (
-                          <>
-                            <FiCheck className="w-3 h-3 text-emerald-400" />
-                            <span className="text-emerald-400">Copied</span>
-                          </>
+
+                        {!isUser ? (
+                          (() => {
+                            const { thinkingContent, actualResponse, isThinkingActive } = parseThinkingAndResponse(message.text);
+                            return (
+                              <MessageRenderBoundary>
+                                {(thinkingContent !== null || isThinkingActive) && (
+                                  <FoldableThinking thinkingText={thinkingContent || ''} isActive={isThinkingActive} />
+                                )}
+                                {actualResponse ? (
+                                  <FormattedMessage text={actualResponse} isUser={false} />
+                                ) : isThinkingActive ? (
+                                  <div className="flex items-center gap-2 text-xs text-slate-400 italic font-mono py-1">
+                                    <FiCpu className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                                    Generating response...
+                                  </div>
+                                ) : null}
+                              </MessageRenderBoundary>
+                            );
+                          })()
                         ) : (
-                          <>
-                            <FiCopy className="w-3 h-3" />
-                            <span>Copy</span>
-                          </>
+                          <MessageRenderBoundary>
+                            <FormattedMessage text={message.text} isUser={true} />
+                          </MessageRenderBoundary>
                         )}
-                      </button>
+                      </div>
+
+                      {/* Action Bar (Copy Button) */}
+                      <div className={`mt-1 flex items-center gap-2 text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity px-1 ${
+                        isUser ? 'justify-end' : 'justify-start'
+                      }`}>
+                        <button
+                          onClick={() => copyMessage(index, message.text)}
+                          className="hover:text-slate-200 transition-colors flex items-center gap-1"
+                          title="Copy message content"
+                        >
+                          {copiedMsgIdx === index ? (
+                            <>
+                              <FiCheck className="w-3 h-3 text-emerald-400" />
+                              <span className="text-emerald-400">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <FiCopy className="w-3 h-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               );
             })}
-
-            {/* Thinking Indicator */}
-            {isThinking && (
-              <div className="flex gap-3 sm:gap-4 animate-slide-up w-full">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shrink-0 shadow-md">
-                  <FiZap className="w-4 h-4 animate-pulse" />
-                </div>
-                <div className="flex flex-col min-w-0 max-w-[85%] sm:max-w-[78%] mr-auto">
-                  <div className={`p-4 rounded-2xl rounded-tl-xs border min-w-0 max-w-full overflow-hidden ${
-                    isDarkMode ? 'bg-slate-800/80 border-slate-700/80 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
-                  }`}>
-                    <FoldableThinking thinkingText="Analyzing prompt and querying NetSuite MCP context..." isActive={true} />
-                  </div>
-                </div>
-
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -747,11 +875,14 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
               : 'bg-slate-50 border-slate-200 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20'
           }`}>
             <button
-              ref={attachmentButtonRef}
-              onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-colors shrink-0"
-              title="Insert NetSuite Template Snippet"
-            >
+            ref={attachmentButtonRef}
+            onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-colors shrink-0"
+            title="Insert NetSuite Template Snippet"
+            aria-haspopup="menu"
+            aria-expanded={showAttachmentMenu}
+            aria-label="Insert NetSuite template snippet"
+          >
               <FiPlus className="w-4 h-4" />
             </button>
 
@@ -768,6 +899,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
               }}
               placeholder="Ask NetSuite Copilot or type SuiteQL query... (Press Enter to send)"
               className="flex-1 bg-transparent border-none outline-none resize-none text-xs sm:text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 max-h-36 py-1 font-sans"
+              aria-label="Chat prompt"
             />
 
             <button
@@ -778,6 +910,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                   ? 'bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 active:scale-95'
                   : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed opacity-60'
               }`}
+              aria-label="Send message"
             >
               <FiSend className="w-4 h-4" />
             </button>

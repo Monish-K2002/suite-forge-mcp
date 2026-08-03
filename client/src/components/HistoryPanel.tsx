@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   FiPlus, 
   FiMessageSquare, 
@@ -11,7 +11,6 @@ import {
   FiCheckCircle, 
   FiLayers,
   FiX,
-  FiClock,
   FiBox
 } from 'react-icons/fi';
 import { useDarkMode } from '../contexts/DarkModeContext';
@@ -84,6 +83,16 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
 }) => {
   const { isDarkMode } = useDarkMode();
   const [searchTerm, setSearchTerm] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const focusSearch = () => {
+      window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    };
+
+    window.addEventListener('suite_forge_focus_history_search', focusSearch);
+    return () => window.removeEventListener('suite_forge_focus_history_search', focusSearch);
+  }, []);
 
   const filteredPrompts = PRESET_PROMPTS.filter(p => 
     p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -104,6 +113,8 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
           ? 'bg-slate-900/95 border-slate-800 text-slate-200' 
           : 'bg-white/95 border-slate-200 text-slate-800'
       } shadow-xl`}
+      aria-label="Templates and conversation history"
+      aria-hidden={!showHistory}
     >
       {/* Header */}
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
@@ -122,6 +133,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
           <button
             onClick={onClose}
             className="p-2.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            aria-label="Close history panel"
           >
             <FiX className="w-4 h-4" />
           </button>
@@ -133,11 +145,13 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
         <div className="relative">
           <FiSearch className="absolute left-3 top-3 w-3.5 h-3.5 text-slate-400" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search templates & history..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            aria-label="Search templates and history"
           />
         </div>
       </div>

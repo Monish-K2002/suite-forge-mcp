@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   FiX, 
   FiDatabase, 
@@ -71,6 +72,9 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
   const [copiedToolName, setCopiedToolName] = useState<string | null>(null);
   const [showClientId, setShowClientId] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const toolListRef = useRef<HTMLDivElement>(null);
 
   const notifyConfigUpdated = () => {
     onConfigSaved?.();
@@ -85,7 +89,6 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   const getCacheConfig = async () => {
     try {
       const config = await connector.getConfig();
-      console.log('config',config)
       if (config.api_provider) setApiProvider(config.api_provider);
       if (config.selected_model) {
         setSelectedModel(config.selected_model);
@@ -130,9 +133,31 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
 
   useEffect(() => {
     getCacheConfig();
+    closeButtonRef.current?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose();
+      if (e.key === 'Escape') {
+        handleClose();
+        return;
+      }
+
+      if (e.key !== 'Tab' || !modalRef.current) return;
+
+      const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (!firstElement || !lastElement) return;
+
+      if (e.shiftKey && document.activeElement === firstElement) {
+        e.preventDefault();
+        lastElement.focus();
+      } else if (!e.shiftKey && document.activeElement === lastElement) {
+        e.preventDefault();
+        firstElement.focus();
+      }
     };
 
     const handleWindowMessage = (e: MessageEvent) => {
@@ -248,13 +273,26 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
     return nameMatch || descMatch;
   });
 
+  const toolVirtualizer = useVirtualizer({
+    count: filteredTools.length,
+    getScrollElement: () => toolListRef.current,
+    estimateSize: (index) => expandedTool === filteredTools[index]?.name ? 240 : 96,
+    overscan: 6,
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in">
-      <div className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden transition-all flex flex-col ${
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="system-configuration-title"
+        className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden transition-all flex flex-col ${
         isDarkMode 
           ? 'bg-slate-900 border-slate-800 text-slate-100' 
           : 'bg-white border-slate-200 text-slate-900'
-      }`}>
+      }`}
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -262,21 +300,25 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
               <FiLayers className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight">System Configuration</h2>
+              <h2 id="system-configuration-title" className="text-lg font-bold tracking-tight">System Configuration</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">Configure NetSuite MCP & AI Provider Credentials</p>
             </div>
           </div>
           <button 
+            ref={closeButtonRef}
             onClick={handleClose} 
             className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+            aria-label="Close system configuration"
           >
             <FiX className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 pt-2 gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 pt-2 gap-2 bg-slate-50/50 dark:bg-slate-900/50" role="tablist" aria-label="Configuration sections">
           <button 
+            role="tab"
+            aria-selected={activeTab === 'netsuite'}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all ${
               activeTab === 'netsuite' 
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
@@ -288,6 +330,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
             NetSuite ERP
           </button>
           <button 
+            role="tab"
+            aria-selected={activeTab === 'mcp'}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all ${
               activeTab === 'mcp' 
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
@@ -304,6 +348,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
             )}
           </button>
           <button 
+            role="tab"
+            aria-selected={activeTab === 'ai'}
             className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all ${
               activeTab === 'ai' 
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
@@ -317,13 +363,13 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto" role="tabpanel">
           {feedback && (
             <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
               feedback.type === 'success' 
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' 
                 : 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'
-            }`}>
+            }`} role="status" aria-live="polite">
               {feedback.type === 'success' ? (
                 <FiCheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
               ) : (
@@ -347,6 +393,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   NetSuite Account ID
                 </label>
                 <input 
+                  id="netsuite-account-id"
                   type="text" 
                   value={accountId}
                   onChange={(e) => setAccountId(e.target.value)}
@@ -362,6 +409,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 <div className="relative">
                   <FiKey className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                   <input 
+                    id="netsuite-client-id"
                     type={showClientId ? "text" : "password"} 
                     value={clientId}
                     onChange={(e) => setClientId(e.target.value)}
@@ -372,6 +420,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     type="button"
                     onClick={() => setShowClientId(!showClientId)}
                     className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    aria-label={showClientId ? 'Hide client ID' : 'Show client ID'}
                   >
                     {showClientId ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
                   </button>
@@ -427,11 +476,13 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     onChange={(e) => setToolSearchQuery(e.target.value)}
                     placeholder="Search MCP tools by name or description..."
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    aria-label="Search MCP tools"
                   />
                   {toolSearchQuery && (
                     <button
                       onClick={() => setToolSearchQuery('')}
                       className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      aria-label="Clear MCP tool search"
                     >
                       <FiX className="w-3.5 h-3.5" />
                     </button>
@@ -470,7 +521,10 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 </div>
 
                 {/* Body List */}
-                <div className="max-h-80 overflow-y-auto p-3 space-y-2">
+                <div
+                  ref={toolListRef}
+                  className="max-h-80 overflow-y-auto p-3"
+                >
                   {fetchingTools ? (
                     /* Skeleton Loading Animation */
                     <div className="py-8 px-4 space-y-3">
@@ -521,20 +575,39 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     </div>
                   ) : (
                     /* Tools List Items */
-                    filteredTools.map((tool) => {
-                      const isExpanded = expandedTool === tool.name;
+                    <div
+                      className="relative"
+                      style={{ height: `${toolVirtualizer.getTotalSize()}px` }}
+                    >
+                      {toolVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const tool = filteredTools[virtualRow.index];
+                        if (!tool) return null;
+
+                        const isExpanded = expandedTool === tool.name;
                       const hasProperties = tool.inputSchema?.properties && Object.keys(tool.inputSchema.properties).length > 0;
                       const reqList: string[] = tool.inputSchema?.required || [];
 
                       return (
                         <div
                           key={tool.name}
+                          ref={toolVirtualizer.measureElement}
+                          data-index={virtualRow.index}
                           onClick={() => setExpandedTool(isExpanded ? null : tool.name)}
-                          className={`rounded-xl border transition-all duration-200 cursor-pointer ${
+                          className={`absolute left-0 top-0 w-full rounded-xl border transition-all duration-200 cursor-pointer ${
                             isExpanded
                               ? 'border-indigo-500/80 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md'
                               : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
                           }`}
+                          style={{ transform: `translateY(${virtualRow.start}px)` }}
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={isExpanded}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setExpandedTool(isExpanded ? null : tool.name);
+                            }
+                          }}
                         >
                           {/* Tool Header Card */}
                           <div className="p-3 flex items-start justify-between gap-3">
@@ -564,6 +637,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                                 onClick={(e) => copyToolName(tool.name, e)}
                                 title="Copy tool name"
                                 className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                                aria-label={`Copy tool name ${tool.name}`}
                               >
                                 {copiedToolName === tool.name ? (
                                   <FiCheck className="w-3.5 h-3.5 text-emerald-500" />
@@ -634,7 +708,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                           )}
                         </div>
                       );
-                    })
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
@@ -690,6 +765,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
                     className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                   >
                     {showApiKey ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
                   </button>

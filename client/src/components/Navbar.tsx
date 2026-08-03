@@ -15,7 +15,6 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
   const [accountId, setAccountId] = useState('');
   const [aiStatus, setAiStatus] = useState(false);
   const [modelName, setModelName] = useState('Not Configured');
-  const [provider, setProvider] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
@@ -35,17 +34,13 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
         setModelName('Not Configured');
       }
 
-      if (config.api_provider) {
-        setProvider(config.api_provider);
-      }
-
       if (config.netsuite_account_id) {
         setAccountId(config.netsuite_account_id);
         setNetSuiteStatus(true);
       } else {
         setNetSuiteStatus(false);
       }
-    } catch (e) {
+    } catch {
       setAiStatus(false);
       setNetSuiteStatus(false);
     } finally {
@@ -90,21 +85,6 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
     }
   };
 
-  const handleDeleteAccount = async (accountId: string) => {
-    try {
-      await connector.deleteAccount(accountId);
-      setAccounts((prev) => prev.filter((acc) => acc.account_id !== accountId));
-      if (accountId === accountId) {
-        setAccountId('');
-        setNetSuiteStatus(false);
-      }
-      window.dispatchEvent(new CustomEvent('suite_forge_config_updated'));
-      fetchStatus();
-    } catch (e) {
-      console.error('Failed to delete account:', e);
-    }
-  };
-
   useEffect(() => {
     fetchStatus();
 
@@ -133,6 +113,21 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
     };
   }, [isAccountMenuOpen]);
 
+  const handleDeleteSelectedAccount = async (selectedAccountId: string) => {
+    try {
+      await connector.deleteAccount(selectedAccountId);
+      setAccounts((prev) => prev.filter((acc) => acc.account_id !== selectedAccountId));
+      if (selectedAccountId === accountId) {
+        setAccountId('');
+        setNetSuiteStatus(false);
+      }
+      window.dispatchEvent(new CustomEvent('suite_forge_config_updated'));
+      fetchStatus();
+    } catch (e) {
+      console.error('Failed to delete account:', e);
+    }
+  };
+
   return (
     <nav className="h-16 px-4 md:px-6 flex items-center justify-between border-b backdrop-blur-xl z-30 transition-colors duration-200 bg-white/70 border-slate-200/80 dark:bg-slate-900/80 dark:border-slate-800/80 shadow-sm shrink-0">
       {/* Left: Brand Logo & Title */}
@@ -158,9 +153,11 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
       {/* Right: Status Badges & Controls */}
       <div className="flex items-center gap-2 sm:gap-3">
         {/* NetSuite Status Badge */}
-        <div 
+        <button
+          type="button"
           onClick={onConfigClick}
           className="cursor-pointer group flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all bg-slate-100/70 border-slate-200 hover:bg-slate-200/60 dark:bg-slate-800/50 dark:border-slate-700/60 dark:hover:bg-slate-800/90 text-xs"
+          aria-label="Open NetSuite configuration"
         >
           <FiDatabase className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 transition-colors" />
           <div className="flex items-center gap-1.5">
@@ -177,12 +174,14 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
               {accountId ? accountId : 'Disconnected'}
             </span>
           </div>
-        </div>
+        </button>
 
         {/* AI Agent Status Badge */}
-        <div 
+        <button
+          type="button"
           onClick={onConfigClick}
           className="cursor-pointer group flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all bg-slate-100/70 border-slate-200 hover:bg-slate-200/60 dark:bg-slate-800/50 dark:border-slate-700/60 dark:hover:bg-slate-800/90 text-xs"
+          aria-label="Open AI model configuration"
         >
           <FiCpu className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 group-hover:text-cyan-500 transition-colors" />
           <div className="flex items-center gap-1.5">
@@ -199,13 +198,14 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
               {modelName}
             </span>
           </div>
-        </div>
+        </button>
 
         {/* Refresh Status button */}
         <button
           onClick={fetchStatus}
           title="Refresh Status"
           className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+          aria-label="Refresh connection status"
         >
           <FiRefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-indigo-500' : ''}`} />
         </button>
@@ -215,6 +215,7 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
           onClick={toggleDarkMode}
           title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+          aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {isDarkMode ? <FiSun className="w-4 h-4 text-amber-400" /> : <FiMoon className="w-4 h-4 text-slate-700" />}
         </button>
@@ -224,6 +225,8 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
           <button
             onClick={handleAccountClick}
             className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md shadow-indigo-600/20 active:scale-95 flex items-center gap-1.5 text-xs font-semibold"
+            aria-haspopup="menu"
+            aria-expanded={isAccountMenuOpen}
           >
             <span className="font-medium text-indigo-100 hidden md:inline">
               Account:
@@ -235,7 +238,10 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
           </button>
 
           {isAccountMenuOpen && (
-            <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div
+              className="absolute right-0 mt-2 w-64 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+              role="menu"
+            >
               <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400">
                   Available Accounts
@@ -275,9 +281,11 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteAccount(acc.account_id);
+                            handleDeleteSelectedAccount(acc.account_id);
                           }}
                           className="text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                          title={`Delete account ${acc.account_id}`}
+                          aria-label={`Delete account ${acc.account_id}`}
                         >
                           <FiTrash className="w-4 h-4" />
                         </button>
@@ -308,6 +316,7 @@ const Navbar: React.FC<NavbarProps> = ({ onConfigClick, refreshTrigger }) => {
           onClick={onConfigClick}
           title="Open Settings"
           className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md shadow-indigo-600/20 active:scale-95 flex items-center gap-1.5 text-xs font-semibold"
+          aria-label="Open settings"
         >
           <FiSettings className="w-4 h-4" />
           <span className="hidden sm:inline">Settings</span>
