@@ -1,5 +1,4 @@
-
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   FiX, 
@@ -76,17 +75,17 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const toolListRef = useRef<HTMLDivElement>(null);
 
-  const notifyConfigUpdated = () => {
+  const notifyConfigUpdated = useCallback(() => {
     onConfigSaved?.();
     window.dispatchEvent(new CustomEvent('suite_forge_config_updated'));
-  };
+  }, [onConfigSaved]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     notifyConfigUpdated();
     onClose();
-  };
+  }, [notifyConfigUpdated, onClose]);
 
-  const getCacheConfig = async () => {
+  const getCacheConfig = useCallback(async () => {
     try {
       const config = await connector.getConfig();
       if (config.api_provider) setApiProvider(config.api_provider);
@@ -100,9 +99,9 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
     } catch (err) {
       console.error("Failed to load initial configuration:", err);
     }
-  };
+  }, [setApiProvider, setSelectedModel, setInUseModelName, setAccountId, setClientId, setApiKey]);
 
-  const fetchMcpTools = async () => {
+  const fetchMcpTools = useCallback(async () => {
     setFetchingTools(true);
     setFeedback(null);
     try {
@@ -121,15 +120,15 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
     } finally {
       setFetchingTools(false);
     }
-  };
+  }, []);
 
-  const handleSelectMcpTab = () => {
+  const handleSelectMcpTab = useCallback(() => {
     setActiveTab('mcp');
     setFeedback(null);
     if (mcpTools.length === 0 && !fetchingTools) {
       fetchMcpTools();
     }
-  };
+  }, [mcpTools.length, fetchingTools, fetchMcpTools]);
 
   useEffect(() => {
     getCacheConfig();
@@ -266,22 +265,26 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
     setTimeout(() => setCopiedToolName(null), 2000);
   };
 
-  const filteredTools = mcpTools.filter((t) => {
+  // Memoize Tool Filter Computation
+  const filteredTools = useMemo(() => {
     const q = toolSearchQuery.toLowerCase().trim();
-    const nameMatch = (t.name || '').toLowerCase().includes(q);
-    const descMatch = (t.description || '').toLowerCase().includes(q);
-    return nameMatch || descMatch;
-  });
+    if (!q) return mcpTools;
+    return mcpTools.filter((t) => {
+      const nameMatch = (t.name || '').toLowerCase().includes(q);
+      const descMatch = (t.description || '').toLowerCase().includes(q);
+      return nameMatch || descMatch;
+    });
+  }, [mcpTools, toolSearchQuery]);
 
   const toolVirtualizer = useVirtualizer({
     count: filteredTools.length,
     getScrollElement: () => toolListRef.current,
-    estimateSize: (index) => expandedTool === filteredTools[index]?.name ? 240 : 96,
-    overscan: 6,
+    estimateSize: useCallback((index: number) => expandedTool === filteredTools[index]?.name ? 240 : 96, [expandedTool, filteredTools]),
+    overscan: 4,
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 transition-opacity duration-200">
       <div
         ref={modalRef}
         role="dialog"
@@ -307,7 +310,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
           <button 
             ref={closeButtonRef}
             onClick={handleClose} 
-            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors cursor-pointer"
             aria-label="Close system configuration"
           >
             <FiX className="w-5 h-5" />
@@ -319,7 +322,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
           <button 
             role="tab"
             aria-selected={activeTab === 'netsuite'}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all cursor-pointer ${
               activeTab === 'netsuite' 
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -332,7 +335,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
           <button 
             role="tab"
             aria-selected={activeTab === 'mcp'}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all cursor-pointer ${
               activeTab === 'mcp' 
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -350,7 +353,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
           <button 
             role="tab"
             aria-selected={activeTab === 'ai'}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all cursor-pointer ${
               activeTab === 'ai' 
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
@@ -419,7 +422,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowClientId(!showClientId)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                     aria-label={showClientId ? 'Hide client ID' : 'Show client ID'}
                   >
                     {showClientId ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
@@ -431,7 +434,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 <button 
                   onClick={handleNetsuiteAuth}
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
                 >
                   {loading ? (
                     <>
@@ -450,7 +453,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
           )}
 
           {activeTab === 'mcp' && (
-            <div className="space-y-4 animate-fade-in">
+            <div className="space-y-4">
               {/* Info Header Banner */}
               <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-cyan-500/10 border border-indigo-500/20 flex items-start gap-3">
                 <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-500 shrink-0 mt-0.5">
@@ -481,7 +484,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   {toolSearchQuery && (
                     <button
                       onClick={() => setToolSearchQuery('')}
-                      className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                       aria-label="Clear MCP tool search"
                     >
                       <FiX className="w-3.5 h-3.5" />
@@ -492,7 +495,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 <button
                   onClick={fetchMcpTools}
                   disabled={fetchingTools}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all shrink-0 active:scale-95"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all shrink-0 active:scale-95 cursor-pointer"
                 >
                   <FiRefreshCw className={`w-3.5 h-3.5 ${fetchingTools ? 'animate-spin text-white' : ''}`} />
                   <span>{fetchingTools ? 'Fetching Tools...' : 'Refresh Tools'}</span>
@@ -508,8 +511,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                       Tool Registry
                     </span>
                     {fetchingTools && (
-                      <span className="text-[10px] text-indigo-500 font-medium animate-pulse flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+                      <span className="text-[10px] text-indigo-500 font-medium flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                         Syncing with MCP...
                       </span>
                     )}
@@ -528,12 +531,12 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   {fetchingTools ? (
                     /* Skeleton Loading Animation */
                     <div className="py-8 px-4 space-y-3">
-                      <div className="flex items-center justify-center gap-2 text-xs font-medium text-indigo-500 animate-pulse mb-4">
+                      <div className="flex items-center justify-center gap-2 text-xs font-medium text-indigo-500 mb-4">
                         <FiRefreshCw className="w-4 h-4 animate-spin text-indigo-500" />
                         <span>Querying MCP Server Tool Specifications...</span>
                       </div>
                       {[1, 2, 3].map((i) => (
-                        <div key={i} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-800/30 animate-pulse space-y-2">
+                        <div key={i} className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-800/30 space-y-2">
                           <div className="flex items-center justify-between">
                             <div className="h-4 w-40 bg-slate-200 dark:bg-slate-700 rounded-md" />
                             <div className="h-3 w-12 bg-slate-200 dark:bg-slate-700 rounded-full" />
@@ -559,14 +562,14 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                       {toolSearchQuery ? (
                         <button
                           onClick={() => setToolSearchQuery('')}
-                          className="mt-3 px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors"
+                          className="mt-3 px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
                         >
                           Clear Search Filter
                         </button>
                       ) : (
                         <button
                           onClick={fetchMcpTools}
-                          className="mt-3 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all flex items-center gap-1.5"
+                          className="mt-3 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
                         >
                           <FiRefreshCw className="w-3.5 h-3.5" />
                           Fetch Tools List
@@ -584,130 +587,130 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                         if (!tool) return null;
 
                         const isExpanded = expandedTool === tool.name;
-                      const hasProperties = tool.inputSchema?.properties && Object.keys(tool.inputSchema.properties).length > 0;
-                      const reqList: string[] = tool.inputSchema?.required || [];
+                        const hasProperties = tool.inputSchema?.properties && Object.keys(tool.inputSchema.properties).length > 0;
+                        const reqList: string[] = tool.inputSchema?.required || [];
 
-                      return (
-                        <div
-                          key={tool.name}
-                          ref={toolVirtualizer.measureElement}
-                          data-index={virtualRow.index}
-                          onClick={() => setExpandedTool(isExpanded ? null : tool.name)}
-                          className={`absolute left-0 top-0 w-full rounded-xl border transition-all duration-200 cursor-pointer ${
-                            isExpanded
-                              ? 'border-indigo-500/80 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md'
-                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
-                          }`}
-                          style={{ transform: `translateY(${virtualRow.start}px)` }}
-                          role="button"
-                          tabIndex={0}
-                          aria-expanded={isExpanded}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setExpandedTool(isExpanded ? null : tool.name);
-                            }
-                          }}
-                        >
-                          {/* Tool Header Card */}
-                          <div className="p-3 flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0 mt-0.5">
-                                <FiTool className="w-4 h-4" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
-                                    {tool.name}
-                                  </h4>
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
-                                    MCP
-                                  </span>
+                        return (
+                          <div
+                            key={tool.name}
+                            ref={toolVirtualizer.measureElement}
+                            data-index={virtualRow.index}
+                            onClick={() => setExpandedTool(isExpanded ? null : tool.name)}
+                            className={`absolute left-0 top-0 w-full rounded-xl border transition-all duration-200 cursor-pointer ${
+                              isExpanded
+                                ? 'border-indigo-500/80 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md'
+                                : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
+                            }`}
+                            style={{ transform: `translateY(${virtualRow.start}px)` }}
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={isExpanded}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setExpandedTool(isExpanded ? null : tool.name);
+                              }
+                            }}
+                          >
+                            {/* Tool Header Card */}
+                            <div className="p-3 flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0 mt-0.5">
+                                  <FiTool className="w-4 h-4" />
                                 </div>
-                                <p className={`mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed ${
-                                  isExpanded ? '' : 'line-clamp-1'
-                                }`}>
-                                  {tool.description || 'No description provided for this tool.'}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                onClick={(e) => copyToolName(tool.name, e)}
-                                title="Copy tool name"
-                                className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-                                aria-label={`Copy tool name ${tool.name}`}
-                              >
-                                {copiedToolName === tool.name ? (
-                                  <FiCheck className="w-3.5 h-3.5 text-emerald-500" />
-                                ) : (
-                                  <FiCopy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                              <div className="text-slate-400">
-                                {isExpanded ? (
-                                  <FiChevronDown className="w-4 h-4 text-indigo-500" />
-                                ) : (
-                                  <FiChevronRight className="w-4 h-4" />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Expanded Details & Input Schema */}
-                          {isExpanded && (
-                            <div className="px-3 pb-3.5 pt-1 border-t border-slate-200/80 dark:border-slate-800/80 mt-1 space-y-3 animate-fade-in">
-                              {hasProperties ? (
-                                <div>
-                                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                                    <FiCode className="w-3 h-3 text-indigo-400" />
-                                    <span>Input Arguments Schema</span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
+                                      {tool.name}
+                                    </h4>
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+                                      MCP
+                                    </span>
                                   </div>
-                                  <div className="space-y-1.5">
-                                    {Object.entries(tool.inputSchema.properties).map(([propKey, propVal]: [string, any]) => {
-                                      const isReq = reqList.includes(propKey);
-                                      return (
-                                        <div
-                                          key={propKey}
-                                          className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs flex flex-col gap-0.5"
-                                        >
-                                          <div className="flex items-center justify-between gap-2">
-                                            <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
-                                              {propKey}
-                                            </span>
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="font-mono text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                                                {propVal?.type || 'any'}
+                                  <p className={`mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed ${
+                                    isExpanded ? '' : 'line-clamp-1'
+                                  }`}>
+                                    {tool.description || 'No description provided for this tool.'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  onClick={(e) => copyToolName(tool.name, e)}
+                                  title="Copy tool name"
+                                  className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                                  aria-label={`Copy tool name ${tool.name}`}
+                                >
+                                  {copiedToolName === tool.name ? (
+                                    <FiCheck className="w-3.5 h-3.5 text-emerald-500" />
+                                  ) : (
+                                    <FiCopy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <div className="text-slate-400">
+                                  {isExpanded ? (
+                                    <FiChevronDown className="w-4 h-4 text-indigo-500" />
+                                  ) : (
+                                    <FiChevronRight className="w-4 h-4" />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Expanded Details & Input Schema */}
+                            {isExpanded && (
+                              <div className="px-3 pb-3.5 pt-1 border-t border-slate-200/80 dark:border-slate-800/80 mt-1 space-y-3">
+                                {hasProperties ? (
+                                  <div>
+                                    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                                      <FiCode className="w-3 h-3 text-indigo-400" />
+                                      <span>Input Arguments Schema</span>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      {Object.entries(tool.inputSchema.properties).map(([propKey, propVal]: [string, any]) => {
+                                        const isReq = reqList.includes(propKey);
+                                        return (
+                                          <div
+                                            key={propKey}
+                                            className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs flex flex-col gap-0.5"
+                                          >
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                                                {propKey}
                                               </span>
-                                              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
-                                                isReq
-                                                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300'
-                                                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                              }`}>
-                                                {isReq ? 'Required' : 'Optional'}
-                                              </span>
+                                              <div className="flex items-center gap-1.5">
+                                                <span className="font-mono text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                                  {propVal?.type || 'any'}
+                                                </span>
+                                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                                                  isReq
+                                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/80 dark:text-rose-300'
+                                                    : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                                                }`}>
+                                                  {isReq ? 'Required' : 'Optional'}
+                                                </span>
+                                              </div>
                                             </div>
+                                            {propVal?.description && (
+                                              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                                {propVal.description}
+                                              </p>
+                                            )}
                                           </div>
-                                          {propVal?.description && (
-                                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                              {propVal.description}
-                                            </p>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
+                                        );
+                                      })}
+                                    </div>
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="text-xs text-slate-400 italic">
-                                  No input parameters required for this tool.
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
+                                ) : (
+                                  <div className="text-xs text-slate-400 italic">
+                                    No input parameters required for this tool.
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
                       })}
                     </div>
                   )}
@@ -733,14 +736,13 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                       key={prov.id}
                       type="button"
                       onClick={() => handleProviderChange(prov.id)}
-                      className={`p-3 rounded-xl border text-left transition-all ${
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                         apiProvider === prov.id 
                           ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shadow-sm' 
                           : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300'
                       }`}
                     >
                       <div className="font-semibold text-xs">{prov.label}</div>
-                      {/* <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{prov.badge}</div> */}
                     </button>
                   ))}
                 </div>
@@ -757,14 +759,13 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     type={showApiKey ? "text" : "password"} 
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    // disabled={Boolean(inUseModelName && apiKey && !loading)}
                     placeholder={apiProvider ? `Enter ${apiProvider.toUpperCase()} API Key...` : "Select provider first"}
                     className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-75"
                   />
                   <button
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                     aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
                   >
                     {showApiKey ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
@@ -781,7 +782,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   <select 
                     value={selectedModel}
                     onChange={(e) => setSelectedModel(e.target.value)}
-                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer"
                   >
                     {modelList.length === 0 ? (
                       <option value="">No models fetched yet. Click 'Fetch Models'.</option>
@@ -796,7 +797,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     type="button"
                     onClick={fetchModels}
                     disabled={loading || !apiProvider || !apiKey}
-                    className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold disabled:opacity-50 transition-colors shrink-0 flex items-center gap-1.5"
+                    className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold disabled:opacity-50 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
                   >
                     {loading ? <FiRefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FiRefreshCw className="w-3.5 h-3.5" />}
                     Fetch
@@ -815,7 +816,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 <button 
                   onClick={useModel}
                   disabled={loading || !selectedModel}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
                 >
                   <FiCheckCircle className="w-4 h-4" />
                   Save & Apply Model Configuration
@@ -829,6 +830,4 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   );
 };
 
-export default ConfigModal;
-
-
+export default React.memo(ConfigModal);

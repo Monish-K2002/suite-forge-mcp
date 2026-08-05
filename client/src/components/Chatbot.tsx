@@ -1,8 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+const SyntaxHighlighterLazy = React.lazy(async () => {
+  const [{ Prism }, { vscDarkPlus }] = await Promise.all([
+    import('react-syntax-highlighter'),
+    import('react-syntax-highlighter/dist/esm/styles/prism')
+  ]);
+  return {
+    default: (props: any) => <Prism style={vscDarkPlus} {...props} />
+  };
+});
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
   FiSend, 
@@ -39,6 +46,15 @@ interface ChatbotProps {
 }
 
 const REMARK_PLUGINS = [remarkGfm];
+
+// Static Pre-compiled Regex Patterns for High Performance
+const DICT_THINKING_PATTERN = /\{['"]type['"]:\s*['"]thinking['"](?:,\s*['"](?:thinking|text|content)['"]:\s*['"]([\s\S]*?)['"])?[\s\S]*?\}/gi;
+const TRAILING_THINKING_DICT = /\{['"]type['"]:\s*['"]thinking['"][\s\S]*$/i;
+const IS_TOOL_PAYLOAD_PATTERN = /"method"|'method'|"success"|'success'|"error"|'error'|"params"|'params'|"result"|'result'/i;
+const DICT_TEXT_PATTERN = /\{['"]type['"]:\s*['"]text['"][\s\S]*?['"]text['"]:\s*['"]([\s\S]*?)['"][\s\S]*?\}/gi;
+const FULL_ARRAY_PATTERN = /\[?\s*\{['"]type['"]:\s*['"]text['"][\s\S]*?\}?\s*\]?/gi;
+const RAW_TOOL_PAYLOAD_PATTERN = /\{['"](?:method|success|error|result)['"]:\s*[\s\S]*?\}/gi;
+const ALT_THINKING_PATTERN = /^\[Thinking:\s*([\s\S]*?)\]\n*([\s\S]*)$/i;
 
 const downloadTextFile = (content: string, filename: string, mimeType = 'text/plain;charset=utf-8') => {
   const blob = new Blob([content], { type: mimeType });
@@ -106,18 +122,18 @@ const normalizeLanguageForHighlight = (language: string) => {
 const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ code, language }) => {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [code]);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     const ext = extensionForLanguage(language || 'code');
     downloadTextFile(code, `suite-forge-snippet.${ext}`);
-  };
+  }, [code, language]);
 
-  const highlightLang = normalizeLanguageForHighlight(language);
+  const highlightLang = useMemo(() => normalizeLanguageForHighlight(language), [language]);
 
   return (
     <div className="my-3 rounded-xl border border-slate-700/80 bg-slate-950 overflow-hidden shadow-lg max-w-full min-w-0">
@@ -129,7 +145,7 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans cursor-pointer"
             title="Download code snippet"
             aria-label="Download code snippet"
           >
@@ -138,7 +154,7 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
           </button>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-[11px] font-sans cursor-pointer"
             aria-label="Copy code snippet"
           >
             {copied ? (
@@ -156,26 +172,27 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
         </div>
       </div>
       <div className="overflow-x-auto max-w-full text-xs font-mono">
-        <SyntaxHighlighter
-          language={highlightLang}
-          style={vscDarkPlus}
-          customStyle={{
-            margin: 0,
-            padding: '1rem',
-            background: 'transparent',
-            fontSize: '0.8125rem',
-            lineHeight: '1.6',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-          }}
-          codeTagProps={{
-            style: {
-              fontFamily: 'inherit',
-            },
-          }}
-          PreTag="div"
-        >
-          {code}
-        </SyntaxHighlighter>
+        <React.Suspense fallback={<pre className="p-4 m-0 text-slate-300 font-mono text-xs overflow-x-auto">{code}</pre>}>
+          <SyntaxHighlighterLazy
+            language={highlightLang}
+            customStyle={{
+              margin: 0,
+              padding: '1rem',
+              background: 'transparent',
+              fontSize: '0.8125rem',
+              lineHeight: '1.6',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+            }}
+            codeTagProps={{
+              style: {
+                fontFamily: 'inherit',
+              },
+            }}
+            PreTag="div"
+          >
+            {code}
+          </SyntaxHighlighterLazy>
+        </React.Suspense>
       </div>
     </div>
   );
@@ -184,128 +201,131 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
 CodeBlock.displayName = 'CodeBlock';
 
 // Rich Markdown Text Formatter using react-markdown
-const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = React.memo(({ text, isUser = false }) => {
-  return (
-    <div className={`text-sm leading-relaxed max-w-full min-w-0 break-words [overflow-wrap:anywhere] ${isUser ? 'text-white' : ''}`}>
-      <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
-        components={{
-          pre({ children }) {
-            return <>{children}</>;
-          },
-          code({ className, children, ...props }: any) {
-            const match = /language-(\w+)/.exec(className || '');
-            const codeString = String(children).replace(/\n$/, '');
-            const isMultiLine = codeString.includes('\n');
+const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = React.memo(
+  ({ text, isUser = false }) => {
+    return (
+      <div className={`text-sm leading-relaxed max-w-full min-w-0 break-words [overflow-wrap:anywhere] ${isUser ? 'text-white' : ''}`}>
+        <ReactMarkdown
+          remarkPlugins={REMARK_PLUGINS}
+          components={{
+            pre({ children }) {
+              return <>{children}</>;
+            },
+            code({ className, children, ...props }: any) {
+              const match = /language-(\w+)/.exec(className || '');
+              const codeString = String(children).replace(/\n$/, '');
+              const isMultiLine = codeString.includes('\n');
 
-            if (match || isMultiLine) {
+              if (match || isMultiLine) {
+                return (
+                  <CodeBlock
+                    code={codeString}
+                    language={match ? match[1] : ''}
+                  />
+                );
+              }
+
               return (
-                <CodeBlock
-                  code={codeString}
-                  language={match ? match[1] : ''}
-                />
-              );
-            }
-
-            return (
-              <code
-                className={`px-1.5 py-0.5 rounded font-mono text-[13px] border break-all inline-block max-w-full overflow-x-auto ${
-                  isUser
-                    ? 'bg-indigo-700/80 text-indigo-100 border-indigo-500/60'
-                    : 'bg-slate-800/90 text-indigo-300 dark:text-indigo-200 border-slate-700/60'
-                }`}
-                {...props}
-              >
-                {children}
-              </code>
-            );
-          },
-          p({ children }) {
-            return <p className="leading-relaxed mb-2.5 last:mb-0 break-words [overflow-wrap:anywhere]">{children}</p>;
-          },
-          ul({ children }) {
-            return <ul className="list-disc list-outside pl-5 space-y-1 my-2 break-words">{children}</ul>;
-          },
-          ol({ children }) {
-            return <ol className="list-decimal list-outside pl-5 space-y-1 my-2 break-words">{children}</ol>;
-          },
-          li({ children }) {
-            return <li className="leading-relaxed pl-0.5 break-words">{children}</li>;
-          },
-          h1({ children }) {
-            return <h1 className="text-lg font-bold my-3 border-b border-slate-700/60 pb-1 break-words">{children}</h1>;
-          },
-          h2({ children }) {
-            return <h2 className="text-base font-bold my-2.5 break-words">{children}</h2>;
-          },
-          h3({ children }) {
-            return <h3 className="text-sm font-bold my-2 break-words">{children}</h3>;
-          },
-          blockquote({ children }) {
-            return (
-              <blockquote
-                className={`border-l-4 pl-3.5 py-1 my-2.5 italic rounded-r-md break-words ${
-                  isUser
-                    ? 'border-indigo-300 bg-indigo-700/40 text-indigo-100'
-                    : 'border-indigo-500/80 bg-indigo-950/20 text-slate-300'
-                }`}
-              >
-                {children}
-              </blockquote>
-            );
-          },
-          table({ children }) {
-            return (
-              <div className="overflow-x-auto max-w-full my-3 rounded-lg border border-slate-700/80 shadow-md block">
-                <table className="min-w-full divide-y divide-slate-700/80 text-left text-xs">
+                <code
+                  className={`px-1.5 py-0.5 rounded font-mono text-[13px] border break-all inline-block max-w-full overflow-x-auto ${
+                    isUser
+                      ? 'bg-indigo-700/80 text-indigo-100 border-indigo-500/60'
+                      : 'bg-slate-800/90 text-indigo-300 dark:text-indigo-200 border-slate-700/60'
+                  }`}
+                  {...props}
+                >
                   {children}
-                </table>
-              </div>
-            );
-          },
-          thead({ children }) {
-            return <thead className="bg-slate-900/90 text-slate-200 font-semibold">{children}</thead>;
-          },
-          tbody({ children }) {
-            return <tbody className="divide-y divide-slate-800/80 bg-slate-950/50">{children}</tbody>;
-          },
-          tr({ children }) {
-            return <tr className="hover:bg-slate-800/40 transition-colors">{children}</tr>;
-          },
-          th({ children }) {
-            return <th className="px-3 py-2 text-slate-200 font-semibold break-words">{children}</th>;
-          },
-          td({ children }) {
-            return <td className="px-3 py-2 text-slate-300 font-mono text-xs break-words">{children}</td>;
-          },
-          a({ href, children }) {
-            return (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${
-                  isUser ? 'text-indigo-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'
-                } underline underline-offset-2 transition-colors font-medium break-all`}
-              >
-                {children}
-              </a>
-            );
-          },
-          hr() {
-            return <hr className={`my-4 ${isUser ? 'border-indigo-400/40' : 'border-slate-700/60'}`} />;
-          }
-        }}
-      >
-        {text}
-      </ReactMarkdown>
-    </div>
-  );
-});
+                </code>
+              );
+            },
+            p({ children }) {
+              return <p className="leading-relaxed mb-2.5 last:mb-0 break-words [overflow-wrap:anywhere]">{children}</p>;
+            },
+            ul({ children }) {
+              return <ul className="list-disc list-outside pl-5 space-y-1 my-2 break-words">{children}</ul>;
+            },
+            ol({ children }) {
+              return <ol className="list-decimal list-outside pl-5 space-y-1 my-2 break-words">{children}</ol>;
+            },
+            li({ children }) {
+              return <li className="leading-relaxed pl-0.5 break-words">{children}</li>;
+            },
+            h1({ children }) {
+              return <h1 className="text-lg font-bold my-3 border-b border-slate-700/60 pb-1 break-words">{children}</h1>;
+            },
+            h2({ children }) {
+              return <h2 className="text-base font-bold my-2.5 break-words">{children}</h2>;
+            },
+            h3({ children }) {
+              return <h3 className="text-sm font-bold my-2 break-words">{children}</h3>;
+            },
+            blockquote({ children }) {
+              return (
+                <blockquote
+                  className={`border-l-4 pl-3.5 py-1 my-2.5 italic rounded-r-md break-words ${
+                    isUser
+                      ? 'border-indigo-300 bg-indigo-700/40 text-indigo-100'
+                      : 'border-indigo-500/80 bg-indigo-950/20 text-slate-300'
+                  }`}
+                >
+                  {children}
+                </blockquote>
+              );
+            },
+            table({ children }) {
+              return (
+                <div className="overflow-x-auto max-w-full my-3 rounded-lg border border-slate-700/80 shadow-md block">
+                  <table className="min-w-full divide-y divide-slate-700/80 text-left text-xs">
+                    {children}
+                  </table>
+                </div>
+              );
+            },
+            thead({ children }) {
+              return <thead className="bg-slate-900/90 text-slate-200 font-semibold">{children}</thead>;
+            },
+            tbody({ children }) {
+              return <tbody className="divide-y divide-slate-800/80 bg-slate-950/50">{children}</tbody>;
+            },
+            tr({ children }) {
+              return <tr className="hover:bg-slate-800/40 transition-colors">{children}</tr>;
+            },
+            th({ children }) {
+              return <th className="px-3 py-2 text-slate-200 font-semibold break-words">{children}</th>;
+            },
+            td({ children }) {
+              return <td className="px-3 py-2 text-slate-300 font-mono text-xs break-words">{children}</td>;
+            },
+            a({ href, children }) {
+              return (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${
+                    isUser ? 'text-indigo-200 hover:text-white' : 'text-indigo-400 hover:text-indigo-300'
+                  } underline underline-offset-2 transition-colors font-medium break-all`}
+                >
+                  {children}
+                </a>
+              );
+            },
+            hr() {
+              return <hr className={`my-4 ${isUser ? 'border-indigo-400/40' : 'border-slate-700/60'}`} />;
+            }
+          }}
+        >
+          {text}
+        </ReactMarkdown>
+      </div>
+    );
+  },
+  (prevProps, nextProps) => prevProps.text === nextProps.text && prevProps.isUser === nextProps.isUser
+);
 
 FormattedMessage.displayName = 'FormattedMessage';
 
-// Helper to parse thinking content vs actual response
+// Helper to parse thinking content vs actual response (Optimized using pre-compiled regexes)
 const parseThinkingAndResponse = (text: string) => {
   if (!text) {
     return { thinkingContent: null, actualResponse: '', isThinkingActive: false };
@@ -333,9 +353,8 @@ const parseThinkingAndResponse = (text: string) => {
     thinkStart = remainingText.indexOf('<think>');
   }
 
-  // 2. Parse stringified dict thinking patterns (e.g. {'type': 'thinking', ...})
-  const dictThinkingPattern = /\{['"]type['"]:\s*['"]thinking['"](?:,\s*['"](?:thinking|text|content)['"]:\s*['"]([\s\S]*?)['"])?[\s\S]*?\}/gi;
-  remainingText = remainingText.replace(dictThinkingPattern, (_, thinkingVal) => {
+  // 2. Parse stringified dict thinking patterns
+  remainingText = remainingText.replace(DICT_THINKING_PATTERN, (_, thinkingVal) => {
     if (thinkingVal) {
       const cleanVal = thinkingVal.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"').trim();
       if (cleanVal) thinkingParts.push(cleanVal);
@@ -344,10 +363,9 @@ const parseThinkingAndResponse = (text: string) => {
   });
 
   // Handle trailing partial dict string like "{'type': 'thinking', ..." while streaming
-  const trailingThinkingDict = /\{['"]type['"]:\s*['"]thinking['"][\s\S]*$/i;
-  if (trailingThinkingDict.test(remainingText)) {
+  if (TRAILING_THINKING_DICT.test(remainingText)) {
     isThinkingActive = true;
-    remainingText = remainingText.replace(trailingThinkingDict, (match) => {
+    remainingText = remainingText.replace(TRAILING_THINKING_DICT, (match) => {
       const matchClean = match
         .replace(/\{['"]type['"]:\s*['"]thinking['"],?\s*/i, '')
         .replace(/['"](?:thinking|text|content)['"]:\s*/i, '')
@@ -358,14 +376,11 @@ const parseThinkingAndResponse = (text: string) => {
     });
   }
 
-  // 3. Parse stringified text dict patterns, e.g. [{'type': 'text', 'text': '{"success":false,"error":...}'}] or {'type': 'text', 'text': '...'}
-  const isToolPayload = (str: string) => /"method"|'method'|"success"|'success'|"error"|'error'|"params"|'params'|"result"|'result'/i.test(str);
-
-  const dictTextPattern = /\{['"]type['"]:\s*['"]text['"][\s\S]*?['"]text['"]:\s*['"]([\s\S]*?)['"][\s\S]*?\}/gi;
-  remainingText = remainingText.replace(dictTextPattern, (_, innerText) => {
+  // 3. Parse stringified text dict patterns
+  remainingText = remainingText.replace(DICT_TEXT_PATTERN, (_, innerText) => {
     if (!innerText) return '';
     const cleanInner = innerText.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"').trim();
-    if (isToolPayload(cleanInner)) {
+    if (IS_TOOL_PAYLOAD_PATTERN.test(cleanInner)) {
       thinkingParts.push(`Tool Payload: ${cleanInner}`);
       return '';
     }
@@ -373,12 +388,11 @@ const parseThinkingAndResponse = (text: string) => {
   });
 
   // Handle full array wrappers like [{'type': 'text', 'text': '...'}]
-  const fullArrayPattern = /\[?\s*\{['"]type['"]:\s*['"]text['"][\s\S]*?\}?\s*\]?/gi;
-  remainingText = remainingText.replace(fullArrayPattern, (fullMatch) => {
+  remainingText = remainingText.replace(FULL_ARRAY_PATTERN, (fullMatch) => {
     const textMatch = fullMatch.match(/['"]text['"]:\s*['"]([\s\S]*?)['"]/i);
     if (textMatch && textMatch[1]) {
       const cleanVal = textMatch[1].replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"').trim();
-      if (isToolPayload(cleanVal)) {
+      if (IS_TOOL_PAYLOAD_PATTERN.test(cleanVal)) {
         thinkingParts.push(`Tool Payload: ${cleanVal}`);
         return '';
       }
@@ -387,28 +401,24 @@ const parseThinkingAndResponse = (text: string) => {
     return '';
   });
 
-  // 4. Handle any raw tool result strings like {"success":false,"error":...} or {"method":...} in text
-  const rawToolPayloadPattern = /\{['"](?:method|success|error|result)['"]:\s*[\s\S]*?\}/gi;
-  remainingText = remainingText.replace(rawToolPayloadPattern, (payloadMatch) => {
+  // 4. Handle raw tool result strings
+  remainingText = remainingText.replace(RAW_TOOL_PAYLOAD_PATTERN, (payloadMatch) => {
     thinkingParts.push(`Tool Payload: ${payloadMatch.trim()}`);
     return '';
   });
 
   // 5. Handle [Thinking: ...] bracketed format
-  const altMatch = remainingText.match(/^\[Thinking:\s*([\s\S]*?)\]\n*([\s\S]*)$/i);
+  const altMatch = remainingText.match(ALT_THINKING_PATTERN);
   if (altMatch) {
     thinkingParts.push(altMatch[1].trim());
     remainingText = altMatch[2].trim();
   }
-
-
 
   const thinkingContent = thinkingParts.length > 0 ? thinkingParts.join('\n\n') : null;
   const actualResponse = remainingText.trim();
 
   return { thinkingContent, actualResponse, isThinkingActive };
 };
-
 
 // Foldable Thinking Process Component
 const FoldableThinking: React.FC<{ thinkingText: string; isActive?: boolean }> = React.memo(({ thinkingText, isActive = false }) => {
@@ -424,7 +434,7 @@ const FoldableThinking: React.FC<{ thinkingText: string; isActive?: boolean }> =
     <div className="mb-3 rounded-xl border border-indigo-500/20 dark:border-indigo-900/40 bg-indigo-50/50 dark:bg-slate-900/60 overflow-hidden text-xs transition-all">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3.5 py-2 hover:bg-indigo-100/50 dark:hover:bg-slate-800/60 transition-colors text-slate-600 dark:text-slate-300 font-medium"
+        className="w-full flex items-center justify-between px-3.5 py-2 hover:bg-indigo-100/50 dark:hover:bg-slate-800/60 transition-colors text-slate-600 dark:text-slate-300 font-medium cursor-pointer"
         aria-expanded={isOpen}
       >
         <div className="flex items-center gap-2">
@@ -436,7 +446,6 @@ const FoldableThinking: React.FC<{ thinkingText: string; isActive?: boolean }> =
           </span>
           {isActive && (
             <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
             </span>
           )}
@@ -457,8 +466,6 @@ const FoldableThinking: React.FC<{ thinkingText: string; isActive?: boolean }> =
 });
 
 FoldableThinking.displayName = 'FoldableThinking';
-
-
 
 const HERO_PROMPTS = [
   {
@@ -504,19 +511,20 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
 
   const isStreamingRef = useRef(false);
   const chunkBufferRef = useRef('');
-  const rafIdRef = useRef<number | null>(null);
+  const flushTimerRef = useRef<number | null>(null);
+
   const virtualRowCount = messages.length + (isThinking ? 1 : 0);
   const messageVirtualizer = useVirtualizer({
     count: virtualRowCount,
     getScrollElement: () => messageListRef.current,
     estimateSize: (index) => {
-      if (index >= messages.length) return 96;
-      return messages[index].sender === 'user' ? 120 : 220;
+      if (index >= messages.length) return 80;
+      return messages[index].sender === 'user' ? 80 : 160;
     },
-    overscan: 6,
+    overscan: 4,
   });
 
-  const flushChunkBuffer = () => {
+  const flushChunkBuffer = useCallback(() => {
     if (chunkBufferRef.current) {
       const toAppend = chunkBufferRef.current;
       chunkBufferRef.current = '';
@@ -532,23 +540,24 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
         return updated;
       });
     }
-    rafIdRef.current = null;
-  };
+    flushTimerRef.current = null;
+  }, [setMessages]);
 
-  const scheduleChunkFlush = () => {
-    if (rafIdRef.current === null) {
-      rafIdRef.current = requestAnimationFrame(flushChunkBuffer);
+  const scheduleChunkFlush = useCallback(() => {
+    if (flushTimerRef.current === null) {
+      // Throttle state flushes to ~30 FPS (33ms interval) to keep UI silky smooth
+      flushTimerRef.current = window.setTimeout(flushChunkBuffer, 33);
     }
-  };
+  }, [flushChunkBuffer]);
 
   useEffect(() => {
     if (virtualRowCount === 0) return;
 
     messageVirtualizer.scrollToIndex(virtualRowCount - 1, {
       align: 'end',
-      behavior: isThinking || isStreamingRef.current ? 'auto' : 'smooth'
+      behavior: 'auto'
     });
-  }, [messages, isThinking, messageVirtualizer, virtualRowCount]);
+  }, [messages.length, isThinking, messageVirtualizer, virtualRowCount]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -606,9 +615,9 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
     } catch (err: any) {
       const errorMsg = err?.message || 'Failed to communicate with NetSuite MCP. Please check API settings.';
       setIsThinking(false);
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
+      if (flushTimerRef.current !== null) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
       }
       flushChunkBuffer();
 
@@ -628,16 +637,15 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
         });
       }
     } finally {
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
+      if (flushTimerRef.current !== null) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
       }
       flushChunkBuffer();
       setIsThinking(false);
       isStreamingRef.current = false;
     }
   };
-
 
   const copyMessage = (index: number, text: string) => {
     navigator.clipboard.writeText(text);
@@ -669,12 +677,12 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
 
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 w-full relative overflow-hidden">
-      {/* Top Action Subheader */}
-      <div className="px-4 py-2.5 border-b backdrop-blur-md flex items-center justify-between z-10 transition-colors bg-white/40 border-slate-200/80 dark:bg-slate-900/40 dark:border-slate-800/80 shrink-0">
+      {/* Top Action Subheader - Clean opacity without GPU backdrop-blur */}
+      <div className="px-4 py-2.5 border-b flex items-center justify-between z-10 transition-colors bg-white/95 border-slate-200/80 dark:bg-slate-900/95 dark:border-slate-800/80 shrink-0">
         <div className="flex items-center gap-2">
           <button 
             onClick={toggleHistory} 
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
             title="Toggle Sidebar History & Templates"
           >
             <FiClock className="w-3.5 h-3.5 text-indigo-500" />
@@ -686,7 +694,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
           {messages.length > 0 && (
             <button
               onClick={handleExportChat}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-slate-500 hover:bg-slate-200/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 transition-colors font-medium"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-slate-500 hover:bg-slate-200/60 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100 transition-colors font-medium cursor-pointer"
               title="Export active conversation as Markdown"
             >
               <FiDownload className="w-3.5 h-3.5" />
@@ -696,7 +704,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
           {messages.length > 0 && (
             <button
               onClick={handleClearChat}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-rose-500 hover:bg-rose-500/10 transition-colors font-medium"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-rose-500 hover:bg-rose-500/10 transition-colors font-medium cursor-pointer"
               title="Clear active conversation"
             >
               <FiTrash2 className="w-3.5 h-3.5" />
@@ -715,7 +723,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
           /* Empty State Hero Dashboard */
           <div className="max-w-3xl mx-auto py-8 sm:py-12 px-4 animate-fade-in text-center space-y-8">
             <div className="inline-flex items-center justify-center p-4 rounded-3xl bg-gradient-to-tr from-indigo-500/20 via-purple-500/20 to-cyan-500/20 border border-indigo-500/30 shadow-2xl shadow-indigo-500/10 mb-2">
-              <FiZap className="w-10 h-10 text-indigo-500 animate-pulse" />
+              <FiZap className="w-10 h-10 text-indigo-500" />
             </div>
 
             <div>
@@ -735,7 +743,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                   <button
                     key={index}
                     onClick={() => handleSendMessage(card.prompt)}
-                    className={`p-4 rounded-2xl border bg-white/60 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800/80 transition-all duration-200 group text-left flex flex-col justify-between shadow-sm hover:shadow-md ${card.gradient}`}
+                    className={`p-4 rounded-2xl border bg-white/60 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800/80 transition-all duration-200 group text-left flex flex-col justify-between shadow-sm hover:shadow-md cursor-pointer ${card.gradient}`}
                   >
                     <div>
                       <div className="flex items-center gap-2.5 mb-1.5">
@@ -780,7 +788,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                   >
                     <div className="flex gap-3 sm:gap-4 animate-slide-up w-full">
                       <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shrink-0 shadow-md">
-                        <FiZap className="w-4 h-4 animate-pulse" />
+                        <FiZap className="w-4 h-4" />
                       </div>
                       <div className="flex flex-col min-w-0 max-w-[85%] sm:max-w-[78%] mr-auto">
                         <div className={`p-4 rounded-2xl rounded-tl-xs border min-w-0 max-w-full overflow-hidden ${
@@ -805,7 +813,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                   className="absolute left-0 top-0 w-full pb-6"
                   style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  <div className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : 'flex-row'} animate-slide-up group w-full`}>
+                  <div className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : 'flex-row'} group w-full`}>
                     {/* Avatar */}
                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold shadow-md ${
                       isUser
@@ -860,7 +868,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                       }`}>
                         <button
                           onClick={() => copyMessage(index, message.text)}
-                          className="hover:text-slate-200 transition-colors flex items-center gap-1"
+                          className="hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
                           title="Copy message content"
                         >
                           {copiedMsgIdx === index ? (
@@ -892,8 +900,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
         )}
       </div>
 
-      {/* Input Container Footer */}
-      <div className="p-3 sm:p-4 border-t backdrop-blur-xl transition-colors bg-white/70 border-slate-200/80 dark:bg-slate-900/80 dark:border-slate-800/80 shrink-0">
+      {/* Input Container Footer - Clean opacity without GPU backdrop-blur */}
+      <div className="p-3 sm:p-4 border-t transition-colors bg-white/95 border-slate-200/80 dark:bg-slate-900/95 dark:border-slate-800/80 shrink-0">
         <div className="max-w-4xl mx-auto relative">
           {/* Quick Context Attachment Dropdown */}
           {showAttachmentMenu && (
@@ -913,7 +921,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                       setInputValue((prev) => (prev ? `${prev}\n${item.snippet}` : item.snippet));
                       setShowAttachmentMenu(false);
                     }}
-                    className="w-full text-left p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors text-slate-700 dark:text-slate-200 font-mono text-[11px] truncate block"
+                    className="w-full text-left p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors text-slate-700 dark:text-slate-200 font-mono text-[11px] truncate block cursor-pointer"
                   >
                     {item.label}
                   </button>
@@ -929,14 +937,14 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
               : 'bg-slate-50 border-slate-200 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20'
           }`}>
             <button
-            ref={attachmentButtonRef}
-            onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-colors shrink-0"
-            title="Insert NetSuite Template Snippet"
-            aria-haspopup="menu"
-            aria-expanded={showAttachmentMenu}
-            aria-label="Insert NetSuite template snippet"
-          >
+              ref={attachmentButtonRef}
+              onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-colors shrink-0 cursor-pointer"
+              title="Insert NetSuite Template Snippet"
+              aria-haspopup="menu"
+              aria-expanded={showAttachmentMenu}
+              aria-label="Insert NetSuite template snippet"
+            >
               <FiPlus className="w-4 h-4" />
             </button>
 
@@ -959,7 +967,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
             <button
               onClick={() => handleSendMessage()}
               disabled={!inputValue.trim() || isThinking}
-              className={`p-2.5 rounded-xl text-white transition-all shrink-0 ${
+              className={`p-2.5 rounded-xl text-white transition-all shrink-0 cursor-pointer ${
                 inputValue.trim() && !isThinking
                   ? 'bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 active:scale-95'
                   : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed opacity-60'
@@ -979,4 +987,4 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
   );
 };
 
-export default Chatbot;
+export default React.memo(Chatbot);

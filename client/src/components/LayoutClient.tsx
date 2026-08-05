@@ -1,4 +1,3 @@
-
 import { lazy, Suspense, useState } from 'react';
 import { useDarkMode } from '../contexts/DarkModeContext';
 import Navbar from './Navbar';
@@ -30,13 +29,18 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
         ? 'dark bg-[#090d16] text-slate-100' 
         : 'bg-slate-50 text-slate-900'
     }`}>
-      {/* Background ambient lighting effects for dark mode */}
+      {/* Background ambient lighting effects for dark mode (Hardware accelerated radial gradients) */}
       {isDarkMode && (
-        <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-          <div className="absolute -top-[20%] -left-[10%] w-[500px] h-[500px] rounded-full bg-indigo-600/10 blur-[130px]" />
-          <div className="absolute top-[40%] -right-[10%] w-[500px] h-[500px] rounded-full bg-cyan-600/10 blur-[140px]" />
-          <div className="absolute -bottom-[20%] left-[30%] w-[600px] h-[600px] rounded-full bg-purple-600/10 blur-[150px]" />
-        </div>
+        <div 
+          className="fixed inset-0 pointer-events-none overflow-hidden z-0 opacity-60" 
+          style={{
+            backgroundImage: `
+              radial-gradient(circle at 10% 0%, rgba(79, 70, 229, 0.15) 0%, transparent 45%),
+              radial-gradient(circle at 90% 50%, rgba(6, 182, 212, 0.15) 0%, transparent 45%),
+              radial-gradient(circle at 50% 100%, rgba(147, 51, 234, 0.15) 0%, transparent 45%)
+            `
+          }}
+        />
       )}
 
       <div className="relative z-10 flex flex-col h-full w-full">
@@ -51,7 +55,7 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
       </div>
 
       {showConfigModal && (
-        <Suspense fallback={<div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md" />}>
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-slate-950/70" />}>
           <ConfigModal 
             onClose={() => setShowConfigModal(false)} 
             isDarkMode={isDarkMode} 
@@ -72,4 +76,3 @@ export default function LayoutClient({ children }: { children: React.ReactNode }
     </div>
   );
 }
-

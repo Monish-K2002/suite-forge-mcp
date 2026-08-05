@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { 
   FiPlus, 
@@ -106,12 +105,12 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
 
   return (
     <aside 
-      className={`fixed inset-y-16 left-0 z-20 w-80 transform transition-transform duration-300 ease-in-out border-r flex flex-col backdrop-blur-xl ${
+      className={`fixed inset-y-16 left-0 z-20 w-80 transform transition-transform duration-300 ease-in-out border-r flex flex-col ${
         showHistory ? 'translate-x-0' : '-translate-x-full'
       } ${
         isDarkMode 
-          ? 'bg-slate-900/95 border-slate-800 text-slate-200' 
-          : 'bg-white/95 border-slate-200 text-slate-800'
+          ? 'bg-slate-900/98 border-slate-800 text-slate-200' 
+          : 'bg-white/98 border-slate-200 text-slate-800'
       } shadow-xl`}
       aria-label="Templates and conversation history"
       aria-hidden={!showHistory}
@@ -123,7 +122,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
             if (onNewChat) onNewChat();
             if (onClose) onClose();
           }}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all shadow-md shadow-indigo-600/20 active:scale-[0.98]"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all shadow-md shadow-indigo-600/20 active:scale-[0.98] cursor-pointer"
         >
           <FiPlus className="w-4 h-4" />
           <span>New Conversation</span>
@@ -132,7 +131,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
         {onClose && (
           <button
             onClick={onClose}
-            className="p-2.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
+            className="p-2.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-pointer"
             aria-label="Close history panel"
           >
             <FiX className="w-4 h-4" />
@@ -176,7 +175,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
                     if (onSelectPrompt) onSelectPrompt(item.prompt);
                     if (onClose) onClose();
                   }}
-                  className="w-full text-left p-2.5 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700/80 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-all group flex items-start gap-2.5"
+                  className="w-full text-left p-2.5 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700/80 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-all group flex items-start gap-2.5 cursor-pointer"
                 >
                   <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform mt-0.5 shrink-0">
                     <IconComp className="w-4 h-4" />
@@ -209,9 +208,9 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
             {savedSessions.length > 0 && onClearHistory && (
               <button 
                 onClick={onClearHistory}
-                className="text-[11px] text-rose-500 hover:text-rose-600 flex items-center gap-1 font-medium transition-colors"
+                className="text-[11px] text-rose-500 hover:text-rose-600 flex items-center gap-1 font-medium transition-colors cursor-pointer"
               >
-                <FiTrash2 className="w-3 h-3" />
+                <FiTrash2 className="w-3.5 h-3.5" />
                 Clear
               </button>
             )}
@@ -272,6 +271,4 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
   );
 };
 
-export default HistoryPanel;
-
-
+export default React.memo(HistoryPanel);
