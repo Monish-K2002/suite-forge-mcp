@@ -11,12 +11,12 @@ from langchain_core.runnables import RunnableConfig
 from services.db.database import DatabaseManager
 import ast
 
-# logging.basicConfig(
-#     filename="ai.log",
-#     level=logging.INFO,
-#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-#     filemode="a"
-# )
+logging.basicConfig(
+    filename="ai.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    filemode="a"
+)
 logger = logging.getLogger(__name__)
 
 system_prompt = """
@@ -276,6 +276,30 @@ class AIService:
             logger.debug(f"AI streaming completed successfully for model {model_name}")
         except Exception as e:
             logger.error(f"Error in stream_chat service: {e}")
+            raise RuntimeError(f"AI Service Execution Error: {str(e)}")
+
+    async def index_account(self):
+        """Index the active account."""
+        try:
+            if not self.tools:
+                await self.init_tools()
+        except Exception as e:
+            logger.warning(f"Failed to initialize tools: {e}")
+        try:
+            logger.info("Indexing account")
+            # logger.info(f"Tools: {self.tools}")
+            # logger.info(f"Tools type: {type(self.tools)}")
+            tool = next(t for t in self.tools if t.name == "ns_getRecordTypeMetadata")
+            logger.info(f"Tool: {tool}")
+            logger.info(f"Tool args_schema: {tool.args_schema}")
+            result = await tool.ainvoke({
+                "recordType": "vendor"
+            })
+            logger.info(f"Result: {result}")
+            # TODO: Implement account indexing logic
+            return {"status": "success", "message": "Account indexed."}
+        except Exception as e:
+            logger.error(f"Error indexing account: {e}")
             raise RuntimeError(f"AI Service Execution Error: {str(e)}")
 
 

@@ -299,6 +299,16 @@ export class NetSuiteConnector {
     }
     return await response.json();
   }
+
+  async indexAccount(): Promise<any> {
+    const response = await fetch(`${this.apiEndpoint}/index-account`, {
+      method: "GET",
+    });
+    if (!response.ok) {
+      throw new Error("Failed to index account.");
+    }
+    return await response.json();
+  }
 }
 
 export const connector = new NetSuiteConnector();

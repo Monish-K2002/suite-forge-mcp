@@ -84,6 +84,15 @@ const Navbar: React.FC<NavbarProps> = React.memo(({ onConfigClick, refreshTrigge
     }
   };
 
+  const handleAccountIndex = async () => {
+    try {
+      await connector.indexAccount();
+      fetchStatus();
+    } catch (e) {
+      console.error('Failed to index account:', e);
+    }
+  };
+
   useEffect(() => {
     fetchStatus();
 
@@ -211,6 +220,19 @@ const Navbar: React.FC<NavbarProps> = React.memo(({ onConfigClick, refreshTrigge
           aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {isDarkMode ? <FiSun className="w-4 h-4 text-amber-400" /> : <FiMoon className="w-4 h-4 text-slate-700" />}
+        </button>
+
+        {/* Index Button */}
+        <button
+          onClick={handleAccountIndex}
+          title="Index"
+          className="p-2 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+          aria-label="Index"
+        >
+          <div className="flex items-center gap-1.5">
+            <FiDatabase className="w-4 h-4" />
+            <span className="hidden sm:inline">INDEX</span>
+          </div>
         </button>
 
         {/* Account Selector Dropdown */}

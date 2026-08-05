@@ -327,5 +327,32 @@ def get_tools_list():
         logger.error(f"Error fetching tools list: {e}")
         return {"tools": []}
 
-
+@app.get("/index-account")
+async def index_account():
+    """Index the active account."""
+    active_account = db.get_active_account()
+    if not active_account or not active_account.get("access_token"):
+        return {"status": "error", "message": "No active account found."}
+    
+    token_config = {
+        "access_token": active_account["access_token"],
+        "refresh_token": active_account.get("refresh_token")
+    }
+    config = {
+        "account_id": active_account["account_id"],
+        "client_id": active_account["client_id"]
+    }
+    
+    try:
+        result = await ai_service.index_account()
+        # Update tokens in database if refreshed
+        db.update_tokens(
+            account_id=active_account["account_id"],
+            access_token=token_config["access_token"],
+            refresh_token=token_config.get("refresh_token")
+        )
+        return {"status": "success", "message": "Account indexed.", "result": result}
+    except Exception as e:
+        logger.error(f"Error indexing account: {e}")
+        return {"status": "error", "message": str(e)}
 
