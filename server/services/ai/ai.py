@@ -166,6 +166,8 @@ class AIService:
         self.llm = None
         self.agent = None
         self.session_id = None
+        self._llm_identity = None
+        self._tools_identity = None
 
     def register_provider(self, name: str, provider: BaseLLMProvider):
         """Register a new LLM provider."""
@@ -184,13 +186,22 @@ class AIService:
         active_account = self.db.get_active_account()
         if not active_account:
             self.tools = []
+            self._tools_identity = None
+            self.agent = None
             return
         
         account_id = active_account.get("account_id", "")
         token = active_account.get("access_token", "")
         if not account_id:
             self.tools = []
+            self._tools_identity = None
+            self.agent = None
             return
+
+        tools_identity = (account_id, token)
+        if self._tools_identity == tools_identity and self.tools:
+            return
+        self.agent = None
 
         try:
             client = MultiServerMCPClient(
@@ -205,9 +216,11 @@ class AIService:
                 }
             )
             self.tools = await client.get_tools()
+            self._tools_identity = tools_identity
         except Exception as e:
             logger.error(f"Error initializing MCP tools: {e}")
             self.tools = []
+            self._tools_identity = tools_identity
 
     def _get_provider(self, api_provider: str) -> BaseLLMProvider:
         provider = self._providers.get(api_provider.lower())
@@ -227,6 +240,8 @@ class AIService:
             raise ValueError("Provider, API Key, and Model Name are required to initialize LLM")
         provider = self._get_provider(api_provider)
         self.llm = provider.create_llm_instance(api_key, model_name)
+        self._llm_identity = (api_provider.lower(), api_key, model_name)
+        self.agent = None
 
     def create_agent_instance(self):
         if not self.llm:
@@ -242,20 +257,19 @@ class AIService:
             return
 
         try:
-            if not self.tools:
-                await self.init_tools()
+            await self.init_tools()
         except Exception as e:
             logger.warning(f"Failed to initialize tools: {e}")
 
         try:
             logger.info(f"Session ID: {session_id}")
-            if not self.session_id or self.session_id != session_id:
-                self.session_id = session_id
-            if not self.llm:
+            identity = (api_provider.lower(), api_key, model_name)
+            if not self.llm or identity != self._llm_identity:
                 self.create_llm_instance(api_provider, api_key, model_name)
             if not self.agent:
                 self.create_agent_instance()
-            config = {"configurable": {"thread_id": self.session_id}}
+            active_account_id = self.get_active_account_id() or "unlinked"
+            config = {"configurable": {"thread_id": f"{active_account_id}:{session_id or 'default'}"}}
             if self.agent:
                 async for event in self.agent.astream({"messages": [("user", message)]}, stream_mode="messages", config=config):
                     chunk, _ = event

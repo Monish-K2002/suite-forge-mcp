@@ -64,6 +64,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   const [clientId, setClientId] = useState('');
   const [loading, setLoading] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [mcpTools, setMcpTools] = useState<any[]>([]);
   const [fetchingTools, setFetchingTools] = useState(false);
@@ -88,6 +89,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   const getCacheConfig = useCallback(async () => {
     try {
       const config = await connector.getConfig();
+      setHasSavedApiKey(config.has_api_key);
       if (config.api_provider) setApiProvider(config.api_provider);
       if (config.selected_model) {
         setSelectedModel(config.selected_model);
@@ -95,7 +97,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
       }
       if (config.netsuite_account_id) setAccountId(config.netsuite_account_id);
       if (config.client_id) setClientId(config.client_id);
-      if (config.api_key) setApiKey(config.api_key);
+      if (!config.has_api_key) setApiKey('');
     } catch (err) {
       console.error("Failed to load initial configuration:", err);
     }
@@ -214,7 +216,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
       setFeedback({ type: 'error', message: 'Please select an API provider first.' });
       return;
     }
-    if (!apiKey) {
+    if (!apiKey && !hasSavedApiKey) {
       setFeedback({ type: 'error', message: 'Please enter a valid API key for your chosen provider.' });
       return;
     }
@@ -728,9 +730,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 </label>
                 <div className="grid grid-cols-3 gap-2.5">
                   {[
-                    { id: 'openai', label: 'OpenAI', badge: 'GPT-4o' },
-                    { id: 'anthropic', label: 'Anthropic', badge: 'Claude 3.5' },
-                    { id: 'google', label: 'Google', badge: 'Gemini 1.5' },
+                    { id: 'google', label: 'Google', badge: 'Gemini' },
                   ].map((prov) => (
                     <button
                       key={prov.id}
@@ -759,7 +759,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     type={showApiKey ? "text" : "password"} 
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder={apiProvider ? `Enter ${apiProvider.toUpperCase()} API Key...` : "Select provider first"}
+                  placeholder={apiProvider ? (hasSavedApiKey ? 'API key saved. Enter a new key to replace it.' : `Enter ${apiProvider.toUpperCase()} API Key...`) : "Select provider first"}
                     className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-75"
                   />
                   <button
@@ -796,7 +796,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   <button 
                     type="button"
                     onClick={fetchModels}
-                    disabled={loading || !apiProvider || !apiKey}
+                    disabled={loading || !apiProvider || (!apiKey && !hasSavedApiKey)}
                     className="px-3.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold disabled:opacity-50 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
                   >
                     {loading ? <FiRefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FiRefreshCw className="w-3.5 h-3.5" />}

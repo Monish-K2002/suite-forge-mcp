@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Chatbot from './components/Chatbot';
 import HistoryPanel from './components/HistoryPanel';
 import type { HistoryItem } from './components/HistoryPanel';
@@ -10,6 +10,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState('default');
   const [messages, setMessages] = useState<{ text: string; sender: 'user' | 'bot'; tokens?: number }[]>([]);
   const [savedSessions, setSavedSessions] = useState<HistoryItem[]>([]);
+  const messageLoadGeneration = useRef(0);
 
   const loadSessions = async (accId?: string) => {
     try {
@@ -23,8 +24,10 @@ export default function App() {
   };
 
   const loadStoredMessages = async (sessionId: string, accId?: string) => {
+    const generation = ++messageLoadGeneration.current;
     try {
       const storedMsgs = await connector.getMessages(sessionId, accId);
+      if (generation !== messageLoadGeneration.current) return;
       if (storedMsgs) {
         const formatted = storedMsgs.map((m) => ({
           text: m.content,
@@ -102,7 +105,8 @@ export default function App() {
   };
 
   const handleNewChat = () => {
-    const newSessionId = `session_${Date.now()}`;
+    const newSessionId = `session_${crypto.randomUUID()}`;
+    messageLoadGeneration.current++;
     setActiveSessionId(newSessionId);
     setMessages([]);
   };

@@ -3,13 +3,16 @@ import json
 import sqlite3
 import logging
 import threading
+import hashlib
 from typing import List, Dict, Any, Optional
 from base64 import b64encode, b64decode
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.padding import PKCS7
 from cryptography.hazmat.backends import default_backend
 
 logger = logging.getLogger(__name__)
+_database_lock = threading.RLock()
 
 class DatabaseManager:
     """
@@ -21,43 +24,53 @@ class DatabaseManager:
 
     def __init__(self, db_path: str = "suite_forge.db"):
         self.db_path = db_path
-        self._lock = threading.Lock()
+        # All managers for the same process share a lock. SQLite still coordinates
+        # other processes; busy_timeout below gives those writers time to finish.
+        self._lock = _database_lock
         self.IV_LENGTH = 16
 
         # Initialize encryption key
         env_key = os.getenv("ENCRYPTION_KEY")
+        if env_key and os.getenv("APP_ENV", "").lower() == "production" and len(env_key) < 32:
+            raise RuntimeError("ENCRYPTION_KEY must contain at least 32 characters when APP_ENV=production")
         if not env_key:
+            if os.getenv("APP_ENV", "").lower() == "production":
+                raise RuntimeError("ENCRYPTION_KEY must be set when APP_ENV=production")
             logger.warning("ENCRYPTION_KEY environment variable not set. Using default key for SQLite local dev encryption.")
             env_key = "suite_forge_mcp_default_secret_key_32bytes"
-        self.SECRET = env_key.ljust(32, "0")[:32].encode('utf-8')
+        self.LEGACY_SECRET = env_key.ljust(32, "0")[:32].encode("utf-8")
+        self.SECRET = hashlib.sha256(env_key.encode("utf-8")).digest()
 
         self._init_db()
         self._migrate_legacy_cache()
 
     def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30)
+        conn.execute("PRAGMA busy_timeout = 30000")
         conn.row_factory = sqlite3.Row
         return conn
 
     def _encrypt(self, text: str) -> str:
         if not text:
             return ""
-        iv = os.urandom(self.IV_LENGTH)
-        cipher = Cipher(algorithms.AES(self.SECRET), modes.CBC(iv), backend=default_backend())
-        encryptor = cipher.encryptor()
-        padder = PKCS7(128).padder()
-        padded_bytes = padder.update(text.encode('utf-8')) + padder.finalize()
-        encrypted_bytes = encryptor.update(padded_bytes) + encryptor.finalize()
-        return f"{b64encode(iv).decode('utf-8')}:{b64encode(encrypted_bytes).decode('utf-8')}"
+        nonce = os.urandom(12)
+        encrypted = AESGCM(self.SECRET).encrypt(nonce, text.encode("utf-8"), None)
+        return f"v2:{b64encode(nonce).decode('ascii')}:{b64encode(encrypted).decode('ascii')}"
 
     def _decrypt(self, data: str) -> str:
         if not data:
             return ""
         try:
+            if data.startswith("v2:"):
+                _, nonce_b64, encrypted_b64 = data.split(":", 2)
+                return AESGCM(self.SECRET).decrypt(
+                    b64decode(nonce_b64), b64decode(encrypted_b64), None
+                ).decode("utf-8")
+            # Read legacy AES-CBC values so existing account credentials remain usable.
             iv_b64, encrypted_b64 = data.split(":")
             iv = b64decode(iv_b64)
             encrypted_bytes = b64decode(encrypted_b64)
-            cipher = Cipher(algorithms.AES(self.SECRET), modes.CBC(iv), backend=default_backend())
+            cipher = Cipher(algorithms.AES(self.LEGACY_SECRET), modes.CBC(iv), backend=default_backend())
             decryptor = cipher.decryptor()
             padded_bytes = decryptor.update(encrypted_bytes) + decryptor.finalize()
             unpadder = PKCS7(128).unpadder()
@@ -110,6 +123,12 @@ class DatabaseManager:
                 );
             """)
 
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_session_id_id ON messages(session_id, id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_account_session_id ON messages(account_id, session_id, id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_account_session ON messages(sender, account_id, session_id, timestamp)")
+            cursor.execute("UPDATE accounts SET is_active = 0 WHERE is_active = 1 AND id NOT IN (SELECT id FROM accounts WHERE is_active = 1 ORDER BY updated_at DESC, id DESC LIMIT 1)")
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_single_active ON accounts(is_active) WHERE is_active = 1")
+            conn.execute("PRAGMA journal_mode = WAL")
             conn.commit()
             conn.close()
 
@@ -192,17 +211,6 @@ class DatabaseManager:
 
         logger.info(f"Account {account_id} saved in database (is_active={set_active})")
         return self.get_account(account_id)
-
-    def delete_account(self, account_id: str) -> None:
-        """Delete an account from the database."""
-        with self._lock:
-            conn = self._get_connection()
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
-            conn.commit()
-            conn.close()
-
-        logger.info(f"Account {account_id} deleted from database")
 
     def get_account(self, account_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
@@ -293,8 +301,15 @@ class DatabaseManager:
         with self._lock:
             conn = self._get_connection()
             cursor = conn.cursor()
+            cursor.execute("SELECT is_active FROM accounts WHERE account_id = ?", (account_id,))
+            existing = cursor.fetchone()
             cursor.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
             deleted = cursor.rowcount > 0
+            if deleted and existing and existing["is_active"]:
+                cursor.execute("SELECT account_id FROM accounts ORDER BY updated_at DESC LIMIT 1")
+                replacement = cursor.fetchone()
+                if replacement:
+                    cursor.execute("UPDATE accounts SET is_active = 1 WHERE account_id = ?", (replacement["account_id"],))
             conn.commit()
             conn.close()
         return deleted
@@ -363,17 +378,17 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT * FROM messages 
                     WHERE session_id = ? AND (account_id = ? OR (account_id IS NULL AND ? = ''))
-                    ORDER BY id ASC 
+                    ORDER BY id DESC
                     LIMIT ?
-                """, (session_id, account_id, account_id, limit))
+                """, (session_id, account_id, account_id, max(0, min(limit, 1000))))
             else:
                 cursor.execute("""
                     SELECT * FROM messages 
                     WHERE session_id = ? 
-                    ORDER BY id ASC 
+                    ORDER BY id DESC
                     LIMIT ?
-                """, (session_id, limit))
-            rows = cursor.fetchall()
+                """, (session_id, max(0, min(limit, 1000))))
+            rows = list(reversed(cursor.fetchall()))
             conn.close()
 
             return [
@@ -406,6 +421,17 @@ class DatabaseManager:
             conn.close()
         return deleted
 
+    def delete_message(self, message_id: int) -> bool:
+        """Remove a message that belongs to an unsuccessful, incomplete turn."""
+        with self._lock:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+            deleted = cursor.rowcount > 0
+            conn.commit()
+            conn.close()
+        return deleted
+
     def get_sessions(self, account_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """List distinct chat sessions with title snippet, message count, and last timestamp."""
         with self._lock:
@@ -415,23 +441,22 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT 
                         session_id,
-                        content as title,
+                        (SELECT content FROM messages m2 WHERE m2.session_id = messages.session_id AND (m2.account_id = ? OR (m2.account_id IS NULL AND ? = '')) AND m2.sender = 'user' ORDER BY m2.id LIMIT 1) as title,
                         MAX(timestamp) as last_updated,
                         COUNT(*) as message_count
                     FROM messages
-                    WHERE sender = 'user' AND (account_id = ? OR (account_id IS NULL AND ? = ''))
+                    WHERE (account_id = ? OR (account_id IS NULL AND ? = ''))
                     GROUP BY session_id
                     ORDER BY last_updated DESC
-                """, (account_id, account_id))
+                """, (account_id, account_id, account_id, account_id))
             else:
                 cursor.execute("""
                     SELECT 
                         session_id,
-                        content as title,
+                        (SELECT content FROM messages m2 WHERE m2.session_id = messages.session_id AND m2.sender = 'user' ORDER BY m2.id LIMIT 1) as title,
                         MAX(timestamp) as last_updated,
                         COUNT(*) as message_count
                     FROM messages
-                    WHERE sender = 'user'
                     GROUP BY session_id
                     ORDER BY last_updated DESC
                 """)
@@ -441,7 +466,7 @@ class DatabaseManager:
             return [
                 {
                     "id": row["session_id"],
-                    "title": row["title"][:40] + ("..." if len(row["title"]) > 40 else ""),
+                    "title": (row["title"] or "New chat")[:40] + ("..." if len(row["title"] or "") > 40 else ""),
                     "timestamp": str(row["last_updated"]),
                     "messageCount": row["message_count"]
                 }
@@ -456,6 +481,8 @@ class DatabaseManager:
         with self._lock:
             conn = self._get_connection()
             cursor = conn.cursor()
+            if key == "api_key" and value:
+                value = {"__encrypted_api_key__": self._encrypt(str(value))}
             json_val = json.dumps(value)
             cursor.execute("""
                 INSERT INTO settings (key, value, updated_at)
@@ -478,7 +505,12 @@ class DatabaseManager:
             if not row:
                 return default
             try:
-                return json.loads(row["value"])
+                value = json.loads(row["value"])
+                if key == "api_key" and isinstance(value, dict) and "__encrypted_api_key__" in value:
+                    return self._decrypt(value["__encrypted_api_key__"])
+                if key == "api_key" and isinstance(value, str) and value:
+                    self.set_setting(key, value)
+                return value
             except Exception:
                 return row["value"]
 
@@ -514,7 +546,11 @@ class DatabaseManager:
                 }
             return default
 
-        return self.get_setting(key, default)
+        value = self.get_setting(key, default)
+        # Upgrade existing plaintext API keys at rest on first read.
+        if key == "api_key" and isinstance(value, str) and value:
+            self.set_setting(key, value)
+        return value
 
     def cache_delete(self, key: str):
         """Backward compatible cache_delete method."""

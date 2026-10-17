@@ -87,10 +87,11 @@ class NetSuiteAuthService:
         if 'client_secret' in config and config['client_secret']:
             params['client_secret'] = config['client_secret']
 
-        response = requests.post(token_url, data=params, headers={'Content-Type': 'application/x-www-form-urlencoded'})
-        
-        # Clean up PKCE data after attempt
-        del self.pkce_store[session_id]
+        try:
+            response = requests.post(token_url, data=params, headers={'Content-Type': 'application/x-www-form-urlencoded'}, timeout=(5, 30))
+        finally:
+            # Always discard one-time PKCE material, including on network failures.
+            self.pkce_store.pop(session_id, None)
 
         if not response.ok:
             logger.error(f"NetSuite token exchange failed: {response.text}")
@@ -111,7 +112,7 @@ class NetSuiteAuthService:
             'Content-Type': 'application/x-www-form-urlencoded'
         }
 
-        response = requests.post(token_url, data=params, headers=headers)
+        response = requests.post(token_url, data=params, headers=headers, timeout=(5, 30))
         if not response.ok:
             logger.error(f"NetSuite token refresh failed: {response.text}")
             response.raise_for_status()
@@ -145,6 +146,7 @@ class NetSuiteAuthService:
                     "Accept": "application/json",
                 },
                 json=payload,
+                timeout=(5, 30),
             )
             if response.status_code == 200:
                 data = response.json()

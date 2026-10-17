@@ -11,3 +11,4 @@ server/cache.data
 **.sqlite
 ELECTRON_MIGRATION_GUIDE.md
 venv/
+**.log

@@ -1,10 +1,12 @@
 import secrets
 import logging
 import json
+from html import escape
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from services.auth.netsuite_auth import NetSuiteAuthService
@@ -45,7 +47,7 @@ class SelectAccountRequest(BaseModel):
 
 class FetchModelsRequest(BaseModel):
     api_provider: str
-    api_key: str
+    api_key: Optional[str] = None
 
 class UseModelRequest(BaseModel):
     model_name: str
@@ -83,7 +85,7 @@ def callback(code: Optional[str] = None, state: Optional[str] = None, error: Opt
     if error:
         if state and state in pending_auths:
             pending_auths.pop(state, None)
-        return HTMLResponse(content=f"<html><body><h2>Authentication Failed</h2><p>{error}</p></body></html>", status_code=400)
+        return HTMLResponse(content=f"<html><body><h2>Authentication Failed</h2><p>{escape(error)}</p></body></html>", status_code=400)
     
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing required authorization parameters (code, state).")
@@ -120,7 +122,13 @@ def callback(code: Optional[str] = None, state: Optional[str] = None, error: Opt
                 <p>You may close this window.</p>
                 <script>
                     if (window.opener) {
-                        window.opener.postMessage({ type: 'NETSUITE_AUTH_SUCCESS' }, '*');
+                        const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+                        try {
+                            const openerOrigin = new URL(document.referrer).origin;
+                            if (allowedOrigins.includes(openerOrigin)) {
+                                window.opener.postMessage({ type: 'NETSUITE_AUTH_SUCCESS' }, openerOrigin);
+                            }
+                        } catch (_) {}
                     }
                     setTimeout(() => window.close(), 2000);
                 </script>
@@ -130,7 +138,7 @@ def callback(code: Optional[str] = None, state: Optional[str] = None, error: Opt
         return HTMLResponse(content=html_content)
     except Exception as e:
         logger.error(f"Error during OAuth callback exchange: {e}")
-        return HTMLResponse(content=f"<html><body><h2>Authentication Error</h2><p>{str(e)}</p></body></html>", status_code=500)
+        return HTMLResponse(content=f"<html><body><h2>Authentication Error</h2><p>{escape(str(e))}</p></body></html>", status_code=500)
 
 @app.get("/accounts")
 def list_accounts():
@@ -163,7 +171,8 @@ def delete_account(account_id: str):
 @app.post("/models")
 def models(body: FetchModelsRequest):
     try:
-        model_list = ai_service.get_models(body.api_provider, body.api_key)
+        api_key = body.api_key or db.get_setting("api_key")
+        model_list = ai_service.get_models(body.api_provider, api_key or "")
         return model_list
     except Exception as e:
         logger.error(f"Error in /models: {e}")
@@ -190,7 +199,6 @@ def get_config():
     api_provider = db.get_setting("api_provider", "")
     active_account = db.get_active_account()
     client_id = active_account["client_id"] if active_account else ""
-    api_key = db.get_setting("api_key")
     has_api_key = bool(db.get_setting("api_key"))
     
     return {
@@ -199,7 +207,6 @@ def get_config():
         "netsuite_account_id": active_account["account_id"] if active_account else "",
         "has_api_key": has_api_key,
         "client_id": client_id,
-        "api_key": api_key
     }
 
 # --- CHAT & MESSAGES ENDPOINTS ---
@@ -233,6 +240,7 @@ def chat(body: ChatRequest):
     async def event_generator():
         full_response = ""
         total_tokens = 0
+        response_saved = False
         try:
             async for token, tokens in ai_service.stream_chat(message, api_provider=api_provider, api_key=api_key, model_name=selected_model, session_id=session_id):
                 full_response += token
@@ -241,13 +249,14 @@ def chat(body: ChatRequest):
                 yield f"data: {payload}\n\n"
 
             # Save AI response to SQLite DB upon completion
-            ai_msg = db.save_message(
+            ai_msg = await run_in_threadpool(db.save_message,
                 sender="ai",
                 content=full_response,
                 model_used=selected_model,
                 account_id=account_id,
                 session_id=session_id
             )
+            response_saved = True
 
             done_payload = json.dumps({
                 "type": "done",
@@ -259,6 +268,8 @@ def chat(body: ChatRequest):
             yield f"data: {done_payload}\n\n"
         except Exception as e:
             logger.error(f"Error handling /chat streaming request: {e}")
+            if not response_saved:
+                await run_in_threadpool(db.delete_message, user_msg["id"])
             err_payload = json.dumps({"type": "error", "error": str(e)})
             yield f"data: {err_payload}\n\n"
 
@@ -295,7 +306,8 @@ def clear_messages(session_id: str = "default", account_id: Optional[str] = None
 @app.delete("/account")
 def delete_account(account_id: str):
     """Delete the active account."""
-    db.delete_account(account_id=account_id)
+    if not db.delete_account(account_id=account_id):
+        raise HTTPException(status_code=404, detail=f"Account '{account_id}' not found.")
     return {"status": "success", "message": "Account deleted."}
 
 @app.get("/get-tools-list")
@@ -351,7 +363,7 @@ async def index_account():
             access_token=token_config["access_token"],
             refresh_token=token_config.get("refresh_token")
         )
-        return {"status": "success", "message": "Account indexed.", "result": result}
+        return {"status": "success", "message": "Account metadata retrieved. Persistent indexing is not implemented yet.", "result": result}
     except Exception as e:
         logger.error(f"Error indexing account: {e}")
         return {"status": "error", "message": str(e)}
