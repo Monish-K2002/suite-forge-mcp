@@ -1,0 +1,53 @@
+# Docker Compose configuration for Local Development with Hot Reloading
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: suite-forge-server-dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - DB_PATH=/app/server/data/suite_forge.db
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-suite_forge_mcp_default_secret_key_32bytes}
+      - CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+    volumes:
+      # Mount code directory for live reload
+      - ./server:/app/server
+      # Exclude venv and pycache from host mount
+      - /app/server/venv
+      - /app/server/__pycache__
+      - server_dev_data:/app/server/data
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    networks:
+      - suite-forge-dev-network
+
+  client:
+    image: node:20-alpine
+    container_name: suite-forge-client-dev
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_NETSUITE_API_ENDPOINT=http://localhost:8000
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      - server
+    networks:
+      - suite-forge-dev-network
+
+volumes:
+  server_dev_data:
+    name: suite_forge_server_dev_data
+
+networks:
+  suite-forge-dev-network:
+    name: suite_forge_dev_network
+    driver: bridge
+

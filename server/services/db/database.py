@@ -22,8 +22,11 @@ class DatabaseManager:
     - App settings & key-value configuration (with AES encryption for sensitive data)
     """
 
-    def __init__(self, db_path: str = "suite_forge.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or os.getenv("DB_PATH", "suite_forge.db")
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
         # All managers for the same process share a lock. SQLite still coordinates
         # other processes; busy_timeout below gives those writers time to finish.
         self._lock = _database_lock

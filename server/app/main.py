@@ -1,3 +1,4 @@
+import os
 import secrets
 import logging
 import json
@@ -22,10 +23,16 @@ auth_service = NetSuiteAuthService()
 ai_service = AIService()
 db = DatabaseManager()
 
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+cors_origins_env = os.getenv("CORS_ORIGINS")
+if cors_origins_env:
+    origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+else:
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://localhost",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
@@ -115,21 +122,22 @@ def callback(code: Optional[str] = None, state: Optional[str] = None, error: Opt
             else:
                 db.cache_set("netsuite_tokens", tokens)
 
-        html_content = """
+        allowed_origins_json = json.dumps(origins)
+        html_content = f"""
         <html>
             <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
                 <h2>NetSuite Authentication Successful!</h2>
                 <p>You may close this window.</p>
                 <script>
-                    if (window.opener) {
-                        const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
-                        try {
+                    if (window.opener) {{
+                        const allowedOrigins = {allowed_origins_json};
+                        try {{
                             const openerOrigin = new URL(document.referrer).origin;
-                            if (allowedOrigins.includes(openerOrigin)) {
-                                window.opener.postMessage({ type: 'NETSUITE_AUTH_SUCCESS' }, openerOrigin);
-                            }
-                        } catch (_) {}
-                    }
+                            if (allowedOrigins.includes(openerOrigin)) {{
+                                window.opener.postMessage({{ type: 'NETSUITE_AUTH_SUCCESS' }}, openerOrigin);
+                            }}
+                        }} catch (_) {{}}
+                    }}
                     setTimeout(() => window.close(), 2000);
                 </script>
             </body>

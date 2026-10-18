@@ -1,0 +1,45 @@
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: suite-forge-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - DB_PATH=/app/server/data/suite_forge.db
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-suite_forge_mcp_default_secret_key_32bytes}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://localhost}
+    volumes:
+      # Persistent volume for SQLite database and cached credentials
+      - server_data:/app/server/data
+    networks:
+      - suite-forge-network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        - VITE_NETSUITE_API_ENDPOINT=${VITE_NETSUITE_API_ENDPOINT:-http://localhost:8000}
+    container_name: suite-forge-client
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - suite-forge-network
+
+volumes:
+  server_data:
+    name: suite_forge_server_data
+
+networks:
+  suite-forge-network:
+    name: suite_forge_network
+    driver: bridge
+

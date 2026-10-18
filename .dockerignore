@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.env.*
+node_modules/
+client/node_modules/
+client/dist/
+server/venv/
+server/__pycache__/
+server/*.db
+server/*.sqlite
+server/*.log
+docs/
+
