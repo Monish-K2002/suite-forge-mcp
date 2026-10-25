@@ -7,7 +7,6 @@ import {
   FiDatabase, 
   FiCode, 
   FiFileText, 
-  FiCheckCircle, 
   FiLayers,
   FiX,
   FiBox
@@ -32,6 +31,7 @@ interface HistoryPanelProps {
   onClearHistory?: () => void;
 }
 
+// Starter prompts shown alongside saved conversations to help users begin common NetSuite tasks.
 const PRESET_PROMPTS = [
   {
     icon: FiDatabase,
@@ -70,6 +70,7 @@ const PRESET_PROMPTS = [
   }
 ];
 
+// Searchable slide-out drawer for starter prompts and previously saved chat sessions.
 const HistoryPanel: React.FC<HistoryPanelProps> = ({ 
   showHistory, 
   onClose,
@@ -104,28 +105,30 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
   );
 
   return (
-    <aside 
-      className={`fixed inset-y-16 left-0 z-20 w-80 transform transition-transform duration-300 ease-in-out border-r flex flex-col ${
+    <>
+    {showHistory && <button type="button" onClick={onClose} className="fixed inset-14 z-20 bg-slate-900/15 backdrop-blur-[1px] motion-enter" aria-label="Close history and prompts" />}
+    <aside
+      className={`fixed inset-y-14 left-0 z-20 flex w-[min(21rem,88vw)] transform flex-col border-r transition-transform duration-200 ease-out ${
         showHistory ? 'translate-x-0' : '-translate-x-full'
       } ${
-        isDarkMode 
-          ? 'bg-slate-900/98 border-slate-800 text-slate-200' 
-          : 'bg-white/98 border-slate-200 text-slate-800'
+        isDarkMode
+          ? 'bg-[#1d2025] border-slate-800 text-slate-200'
+          : 'bg-white border-slate-200 text-slate-800'
       } shadow-xl`}
       aria-label="Templates and conversation history"
       aria-hidden={!showHistory}
     >
       {/* Header */}
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 p-4 dark:border-slate-800">
         <button
           onClick={() => {
             if (onNewChat) onNewChat();
             if (onClose) onClose();
           }}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all shadow-md shadow-indigo-600/20 active:scale-[0.98] cursor-pointer"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-sky-700 hover:bg-sky-800 text-white font-medium text-sm transition-colors cursor-pointer"
         >
           <FiPlus className="w-4 h-4" />
-          <span>New Conversation</span>
+          <span>New chat</span>
         </button>
 
         {onClose && (
@@ -146,7 +149,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search templates & history..."
+            placeholder="Search prompts and chats"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
@@ -161,7 +164,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
         <div>
           <div className="flex items-center justify-between px-2 mb-2">
             <span className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
-              NetSuite Copilot Templates
+              Prompts
             </span>
           </div>
 
@@ -177,7 +180,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
                   }}
                   className="w-full text-left p-2.5 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700/80 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-all group flex items-start gap-2.5 cursor-pointer"
                 >
-                  <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform mt-0.5 shrink-0">
+                  <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 mt-0.5 shrink-0">
                     <IconComp className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -202,9 +205,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
         {/* Previous Chat Sessions */}
         <div>
           <div className="flex items-center justify-between px-2 mb-2">
-            <span className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
-              Recent History
-            </span>
+            <span className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Recent chats</span>
             {savedSessions.length > 0 && onClearHistory && (
               <button 
                 onClick={onClearHistory}
@@ -228,13 +229,14 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
               {filteredSessions.map((session) => {
                 const isActive = session.id === activeSessionId;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={session.id}
                     onClick={() => {
                       if (onSelectSession) onSelectSession(session.id);
                       if (onClose) onClose();
                     }}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                    className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all flex items-center justify-between gap-2 cursor-pointer ${
                       isActive 
                         ? 'bg-indigo-50 border-indigo-200 text-indigo-900 dark:bg-indigo-950/60 dark:border-indigo-800 dark:text-indigo-200 font-semibold' 
                         : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
@@ -251,7 +253,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
                         {session.timestamp ? session.timestamp.split('T')[0] : ''}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -260,14 +262,9 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({
       </div>
 
       {/* Footer Info */}
-      <div className="p-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between text-[11px] text-slate-400">
-        <span className="flex items-center gap-1">
-          <FiCheckCircle className="w-3 h-3 text-emerald-500" />
-          SQLite Database Active
-        </span>
-        <span className="font-mono text-[10px]">v1.0.0</span>
-      </div>
+      <div className="p-3 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-400">Select a prompt to start a conversation.</div>
     </aside>
+    </>
   );
 };
 

@@ -8,6 +8,7 @@ interface DarkModeContextProps {
 
 const DarkModeContext = createContext<DarkModeContextProps | undefined>(undefined);
 
+// Keeps theme choice in one place, persists it in localStorage, and applies the Tailwind `dark` class.
 export const DarkModeProvider = ({ children }: { children: ReactNode }) => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('suite_forge_theme');

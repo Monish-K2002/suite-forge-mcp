@@ -1,6 +1,25 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { 
+  FiSend, 
+  FiPlus, 
+  FiClock, 
+  FiCopy, 
+  FiCheck, 
+  FiUser, 
+  FiTrash2, 
+  FiTerminal,
+  FiCpu,
+  FiChevronDown,
+  FiChevronRight,
+  FiDownload
+} from 'react-icons/fi';
+
+import { useDarkMode } from '../contexts/DarkModeContext';
+
+// Load the large syntax highlighter only when a rendered answer contains a code block.
 const SyntaxHighlighterLazy = React.lazy(async () => {
   const [{ Prism }, { vscDarkPlus }] = await Promise.all([
     import('react-syntax-highlighter'),
@@ -10,29 +29,6 @@ const SyntaxHighlighterLazy = React.lazy(async () => {
     default: (props: any) => <Prism style={vscDarkPlus} {...props} />
   };
 });
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { 
-  FiSend, 
-  FiPlus, 
-  FiClock, 
-  FiZap, 
-  FiCopy, 
-  FiCheck, 
-  FiUser, 
-  FiCode, 
-  FiDatabase, 
-  FiFileText, 
-  FiTrash2, 
-  FiStar,
-  FiCornerDownLeft,
-  FiTerminal,
-  FiCpu,
-  FiChevronDown,
-  FiChevronRight,
-  FiDownload
-} from 'react-icons/fi';
-
-import { useDarkMode } from '../contexts/DarkModeContext';
 
 interface ChatbotProps {
   onSendMessage: (message: string, onChunk?: (chunk: string) => void) => Promise<{ response: string; total_tokens?: number } | any>;
@@ -201,6 +197,7 @@ const CodeBlock: React.FC<{ code: string; language: string }> = React.memo(({ co
 CodeBlock.displayName = 'CodeBlock';
 
 // Rich Markdown Text Formatter using react-markdown
+// Render assistant/user text as Markdown, with copyable and downloadable highlighted code blocks.
 const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = React.memo(
   ({ text, isUser = false }) => {
     return (
@@ -326,6 +323,7 @@ const FormattedMessage: React.FC<{ text: string; isUser?: boolean }> = React.mem
 FormattedMessage.displayName = 'FormattedMessage';
 
 // Helper to parse thinking content vs actual response (Optimized using pre-compiled regexes)
+// Separate optional model reasoning/tool payloads from the user-facing answer before Markdown rendering.
 const parseThinkingAndResponse = (text: string) => {
   if (!text) {
     return { thinkingContent: null, actualResponse: '', isThinkingActive: false };
@@ -467,37 +465,7 @@ const FoldableThinking: React.FC<{ thinkingText: string; isActive?: boolean }> =
 
 FoldableThinking.displayName = 'FoldableThinking';
 
-const HERO_PROMPTS = [
-  {
-    icon: FiDatabase,
-    title: 'Run SuiteQL Statement',
-    desc: 'Query NetSuite records & joined tables via SQL',
-    prompt: 'Write a SuiteQL query to get top 5 Customers with open Sales Orders.',
-    gradient: 'from-blue-500/20 to-indigo-500/20 border-blue-500/30'
-  },
-  {
-    icon: FiCode,
-    title: 'Generate SuiteScript 2.1',
-    desc: 'Create User Event, Scheduled or RESTlet scripts',
-    prompt: 'Write a SuiteScript 2.1 User Event script that logs customer field changes before submit.',
-    gradient: 'from-purple-500/20 to-indigo-500/20 border-purple-500/30'
-  },
-  {
-    icon: FiFileText,
-    title: 'Sales Order Inspection',
-    desc: 'Fetch order statuses, line items, and fulfillment state',
-    prompt: 'Fetch pending fulfillment Sales Orders and list total amounts.',
-    gradient: 'from-cyan-500/20 to-blue-500/20 border-cyan-500/30'
-  },
-  {
-    icon: FiStar,
-    title: 'NetSuite Record Schema',
-    desc: 'Explore standard field IDs, joins & sublists',
-    prompt: 'Show the standard schema and field IDs for Customer and Invoice records in NetSuite.',
-    gradient: 'from-emerald-500/20 to-teal-500/20 border-emerald-500/30'
-  }
-];
-
+// Main chat UI: virtualized message list, prompt composer, streaming output, and chat actions.
 const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, messages, setMessages }) => {
   const { isDarkMode } = useDarkMode();
   const [inputValue, setInputValue] = useState('');
@@ -524,6 +492,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
     overscan: 4,
   });
 
+  // Batch incoming stream tokens into fewer React updates for smoother rendering.
   const flushChunkBuffer = useCallback(() => {
     if (chunkBufferRef.current) {
       const toAppend = chunkBufferRef.current;
@@ -557,7 +526,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
       align: 'end',
       behavior: 'auto'
     });
-  }, [messages.length, isThinking, messageVirtualizer, virtualRowCount]);
+  }, [messages, isThinking, messageVirtualizer, virtualRowCount]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -576,6 +545,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Add the user's turn, stream the assistant response into the last message, and handle failures.
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend = customPrompt || inputValue;
     if (textToSend.trim() === '' || isThinking || isStreamingRef.current) return;
@@ -678,15 +648,15 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 w-full relative overflow-hidden">
       {/* Top Action Subheader - Clean opacity without GPU backdrop-blur */}
-      <div className="px-4 py-2.5 border-b flex items-center justify-between z-10 transition-colors bg-white/95 border-slate-200/80 dark:bg-slate-900/95 dark:border-slate-800/80 shrink-0">
+      <div className="px-4 py-2.5 border-b flex items-center justify-between z-10 transition-colors bg-white border-slate-200 dark:bg-[#1d2025] dark:border-slate-800 shrink-0">
         <div className="flex items-center gap-2">
           <button 
             onClick={toggleHistory} 
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             title="Toggle Sidebar History & Templates"
           >
-            <FiClock className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="hidden sm:inline">Templates & History</span>
+            <FiClock className="w-4 h-4" />
+            <span>History & prompts</span>
           </button>
         </div>
 
@@ -720,51 +690,13 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
       {/* Main Conversation Scroll Body */}
       <div ref={messageListRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
         {messages.length === 0 ? (
-          /* Empty State Hero Dashboard */
-          <div className="max-w-3xl mx-auto py-8 sm:py-12 px-4 animate-fade-in text-center space-y-8">
-            <div className="inline-flex items-center justify-center p-4 rounded-3xl bg-gradient-to-tr from-indigo-500/20 via-purple-500/20 to-cyan-500/20 border border-indigo-500/30 shadow-2xl shadow-indigo-500/10 mb-2">
-              <FiZap className="w-10 h-10 text-indigo-500" />
-            </div>
-
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                How can I assist your <span className="bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 bg-clip-text text-transparent">NetSuite Workspace</span> today?
-              </h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-xl mx-auto">
-                Suite Forge combines MCP tool capabilities with LLM intelligence to execute SuiteQL queries, generate SuiteScript 2.1, and manage NetSuite records.
-              </p>
-            </div>
-
-            {/* Quick Hero Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-left pt-2">
-              {HERO_PROMPTS.map((card, index) => {
-                const Icon = card.icon;
-                return (
-                  <button
-                    key={index}
-                    onClick={() => handleSendMessage(card.prompt)}
-                    className={`p-4 rounded-2xl border bg-white/60 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800/80 transition-all duration-200 group text-left flex flex-col justify-between shadow-sm hover:shadow-md cursor-pointer ${card.gradient}`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2.5 mb-1.5">
-                        <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 group-hover:scale-110 transition-transform">
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-500 transition-colors">
-                          {card.title}
-                        </h3>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-                        {card.desc}
-                      </p>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-[11px] font-medium text-indigo-500 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span>Send prompt</span>
-                      <FiCornerDownLeft className="w-3.5 h-3.5" />
-                    </div>
-                  </button>
-                );
-              })}
+          <div className="motion-enter mx-auto flex min-h-full max-w-3xl items-center px-4 pb-24">
+            <div className="w-full border-l-2 border-slate-200 py-2 pl-5 dark:border-slate-700">
+              <h2 className="text-lg font-medium tracking-tight text-slate-800 dark:text-slate-100">Start a conversation</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Ask a question, draft a SuiteScript, or explore NetSuite data.</p>
+              <button onClick={toggleHistory} className="mt-4 text-sm font-medium text-sky-700 underline decoration-slate-300 underline-offset-4 transition-colors hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-200">
+                Browse prompts and recent conversations
+              </button>
             </div>
           </div>
         ) : (
@@ -786,9 +718,9 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                     className="absolute left-0 top-0 w-full pb-6"
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    <div className="flex gap-3 sm:gap-4 animate-slide-up w-full">
-                      <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shrink-0 shadow-md">
-                        <FiZap className="w-4 h-4" />
+                    <div className="flex gap-3 sm:gap-4 motion-enter w-full">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 flex items-center justify-center shrink-0 text-[10px] font-semibold">
+                        SF
                       </div>
                       <div className="flex flex-col min-w-0 max-w-[85%] sm:max-w-[78%] mr-auto">
                         <div className={`p-4 rounded-2xl rounded-tl-xs border min-w-0 max-w-full overflow-hidden ${
@@ -815,12 +747,12 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                 >
                   <div className={`flex gap-3 sm:gap-4 ${isUser ? 'flex-row-reverse' : 'flex-row'} group w-full`}>
                     {/* Avatar */}
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold shadow-md ${
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-medium ${
                       isUser
-                        ? 'bg-slate-700 text-white'
-                        : 'bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 text-white'
+                        ? 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200'
+                        : 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200'
                     }`}>
-                      {isUser ? <FiUser className="w-4 h-4" /> : <FiZap className="w-4 h-4" />}
+                      {isUser ? <FiUser className="w-4 h-4" /> : 'SF'}
                     </div>
 
                     {/* Message Bubble Container */}
@@ -828,10 +760,10 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                       <div
                         className={`p-4 rounded-2xl shadow-sm border transition-all min-w-0 max-w-full overflow-hidden break-words [overflow-wrap:anywhere] ${
                         isUser
-                          ? 'bg-indigo-600 text-white border-indigo-500 rounded-tr-xs'
+                          ? 'bg-sky-700 text-white border-sky-700 rounded-tr-xs'
                           : isDarkMode
-                            ? 'bg-slate-800/80 text-slate-100 border-slate-700/80 rounded-tl-xs'
-                            : 'bg-white text-slate-800 border-slate-200 rounded-tl-xs shadow-slate-100'
+                            ? 'bg-[#22252a] text-slate-100 border-slate-700 rounded-tl-xs'
+                            : 'bg-white text-slate-800 border-slate-200 rounded-tl-xs'
                       }`}
                         aria-live={isUser ? undefined : 'polite'}
                       >
@@ -901,11 +833,11 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
       </div>
 
       {/* Input Container Footer - Clean opacity without GPU backdrop-blur */}
-      <div className="p-3 sm:p-4 border-t transition-colors bg-white/95 border-slate-200/80 dark:bg-slate-900/95 dark:border-slate-800/80 shrink-0">
+      <div className="p-3 sm:p-4 border-t transition-colors bg-white border-slate-200 dark:bg-[#1d2025] dark:border-slate-800 shrink-0">
         <div className="max-w-4xl mx-auto relative">
           {/* Quick Context Attachment Dropdown */}
           {showAttachmentMenu && (
-            <div className="absolute bottom-full left-0 mb-2 w-72 p-2 rounded-2xl border shadow-2xl z-30 animate-fade-in bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-xs">
+            <div className="absolute bottom-full left-0 mb-2 w-72 p-2 rounded-xl border shadow-lg z-30 motion-enter bg-white dark:bg-[#24272d] border-slate-200 dark:border-slate-700 text-xs">
               <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                 Quick NetSuite Snippets
               </div>
@@ -933,8 +865,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
           {/* Main Input Text Area Box */}
           <div className={`flex items-end gap-2 p-2 sm:p-2.5 rounded-2xl border transition-all ${
             isDarkMode 
-              ? 'bg-slate-800/70 border-slate-700/80 focus-within:border-indigo-500/80 focus-within:ring-2 focus-within:ring-indigo-500/20' 
-              : 'bg-slate-50 border-slate-200 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20'
+              ? 'bg-[#24272d] border-slate-700 focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-600/15'
+              : 'bg-slate-50 border-slate-200 focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-600/15'
           }`}>
             <button
               ref={attachmentButtonRef}
@@ -959,7 +891,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
                   handleSendMessage();
                 }
               }}
-              placeholder="Ask NetSuite Copilot or type SuiteQL query... (Press Enter to send)"
+              placeholder="Ask a question or enter a SuiteQL query…"
               className="flex-1 bg-transparent border-none outline-none resize-none text-xs sm:text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 max-h-36 py-1 font-sans"
               aria-label="Chat prompt"
             />
@@ -969,7 +901,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
               disabled={!inputValue.trim() || isThinking}
               className={`p-2.5 rounded-xl text-white transition-all shrink-0 cursor-pointer ${
                 inputValue.trim() && !isThinking
-                  ? 'bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/30 active:scale-95'
+                  ? 'bg-sky-700 hover:bg-sky-800 active:scale-95'
                   : 'bg-slate-300 dark:bg-slate-700 text-slate-500 cursor-not-allowed opacity-60'
               }`}
               aria-label="Send message"
@@ -978,8 +910,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onSendMessage, toggleHistory, message
             </button>
           </div>
           <div className="flex items-center justify-between px-2 mt-1.5 text-[10px] text-slate-400">
-            <span>Press <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[9px]">Shift+Enter</kbd> for new line</span>
-            <span>NetSuite MCP Connected</span>
+            <span><kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[9px]">Enter</kbd> to send · <kbd className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[9px]">Shift+Enter</kbd> for a new line</span>
           </div>
         </div>
       </div>

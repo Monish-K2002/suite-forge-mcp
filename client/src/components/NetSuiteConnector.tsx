@@ -25,6 +25,7 @@ export interface ChatMessageItem {
   timestamp: string;
 }
 
+// HTTP boundary for the frontend: all calls to the Python API are collected here.
 export class NetSuiteConnector {
   private apiEndpoint: string;
 
@@ -32,6 +33,7 @@ export class NetSuiteConnector {
     this.apiEndpoint = (apiEndpoint || import.meta.env.VITE_NETSUITE_API_ENDPOINT || 'http://localhost:8000').replace(/\/+$/, '');
   }
 
+  // Send a chat turn and handle either JSON replies or the server's token-by-token SSE stream.
   async sendMessage(
     message: string, 
     sessionId: string = 'default',
@@ -76,53 +78,49 @@ export class NetSuiteConnector {
       let buffer = "";
       let doneData: any = null;
 
+      const consumeEvent = (frame: string) => {
+        const data = frame
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).replace(/^ /, ""))
+          .join("\n");
+        if (!data) return;
+
+        let parsed: any;
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          console.warn("Ignoring malformed SSE event from chat endpoint.");
+          return;
+        }
+
+        if (parsed.type === "token" && typeof parsed.token === "string") {
+          fullResponse += parsed.token;
+          onChunk?.(parsed.token);
+        } else if (parsed.type === "done") {
+          doneData = parsed;
+        } else if (parsed.type === "error") {
+          throw new Error(parsed.error || "The chat stream returned an error.");
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          buffer += decoder.decode();
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("data: ")) {
-            const jsonStr = trimmed.substring(6);
-            try {
-              const parsed = JSON.parse(jsonStr);
-              if (parsed.type === "token") {
-                fullResponse += parsed.token;
-                if (onChunk) onChunk(parsed.token);
-              } else if (parsed.type === "done") {
-                doneData = parsed;
-              } else if (parsed.type === "error") {
-                throw new Error(parsed.error);
-              }
-            } catch (e: any) {
-              if (e.message && !e.message.includes("JSON")) {
-                throw e;
-              }
-            }
-          }
+        let separator: RegExpExecArray | null;
+        const frameSeparator = /\r?\n\r?\n/;
+        while ((separator = frameSeparator.exec(buffer)) !== null) {
+          consumeEvent(buffer.slice(0, separator.index));
+          buffer = buffer.slice(separator.index + separator[0].length);
         }
       }
 
-      if (buffer.trim().startsWith("data: ")) {
-        const jsonStr = buffer.trim().substring(6);
-        try {
-          const parsed = JSON.parse(jsonStr);
-          if (parsed.type === "token") {
-            fullResponse += parsed.token;
-            if (onChunk) onChunk(parsed.token);
-          } else if (parsed.type === "done") {
-            doneData = parsed;
-          } else if (parsed.type === "error") {
-            throw new Error(parsed.error);
-          }
-        } catch {
-          // ignore incomplete trailing chunk
-        }
-      }
+      if (buffer.trim()) consumeEvent(buffer);
 
       return {
         response: fullResponse || doneData?.response || "",
@@ -136,6 +134,7 @@ export class NetSuiteConnector {
     }
   }
 
+  // Begin the NetSuite OAuth flow; the server returns the URL the user must authorize.
   async authenticateNetSuite(accountId: string, clientId: string, clientSecret?: string): Promise<{ auth_url: string; session_id: string }> {
     const response = await fetch(`${this.apiEndpoint}/auth`, {
       method: "POST",
@@ -157,6 +156,7 @@ export class NetSuiteConnector {
     return await response.json();
   }
 
+  // Account management and saved chat history endpoints.
   async getAccounts(): Promise<{ accounts: AccountItem[]; active_account_id: string | null }> {
     const response = await fetch(`${this.apiEndpoint}/accounts`);
     if (!response.ok) {
@@ -242,6 +242,7 @@ export class NetSuiteConnector {
     return await response.json();
   }
 
+  // AI provider/model configuration and backend tool discovery/indexing endpoints.
   async fetchModels(apiProvider: string, apiKey: string): Promise<Array<{ name: string; displayName: string }>> {
     const response = await fetch(`${this.apiEndpoint}/models`, {
       method: "POST",
@@ -301,10 +302,11 @@ export class NetSuiteConnector {
 
   async indexAccount(): Promise<any> {
     const response = await fetch(`${this.apiEndpoint}/index-account`, {
-      method: "GET",
+      method: "POST",
     });
     if (!response.ok) {
-      throw new Error("Failed to index account.");
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.detail || "Failed to index account.");
     }
     return await response.json();
   }

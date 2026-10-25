@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "suite-forge-cli"
+version = "0.1.0"
+description = "Standalone CLI for Suite Forge AI chat and NetSuite MCP tools"
+requires-python = ">=3.10"
+dependencies = [
+  "requests>=2.31.0",
+  "cryptography>=42.0.0",
+  "typer>=0.12.0",
+  "google-genai>=2.0.0",
+  "langchain>=0.3.0",
+  "langchain-core>=0.3.0",
+  "langchain-google-genai>=2.0.0",
+  "langchain-mcp-adapters>=0.1.0",
+  "langgraph>=0.2.0",
+]
+
+[project.scripts]
+suite-forge = "cli:main"
+
+[tool.setuptools]
+py-modules = ["cli"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["services*"]
+namespaces = true

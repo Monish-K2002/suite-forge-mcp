@@ -5,6 +5,7 @@ import type { HistoryItem } from './components/HistoryPanel';
 import { connector } from './components/NetSuiteConnector';
 
 
+// Main chat screen: owns active conversation/history state and connects UI events to the API client.
 export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState('default');
@@ -12,6 +13,7 @@ export default function App() {
   const [savedSessions, setSavedSessions] = useState<HistoryItem[]>([]);
   const messageLoadGeneration = useRef(0);
 
+  // Refresh the saved conversation list for the current NetSuite account.
   const loadSessions = async (accId?: string) => {
     try {
       const dbSessions = await connector.getSessions(accId);
@@ -23,6 +25,7 @@ export default function App() {
     }
   };
 
+  // Load one conversation; the generation counter prevents a slow old request replacing newer chat data.
   const loadStoredMessages = async (sessionId: string, accId?: string) => {
     const generation = ++messageLoadGeneration.current;
     try {
@@ -42,6 +45,7 @@ export default function App() {
     }
   };
 
+  // On startup/config changes, select a valid conversation for the active account and load its messages.
   const loadAccountAndData = async () => {
     try {
       const config = await connector.getConfig();
@@ -87,6 +91,7 @@ export default function App() {
     fetchSessionData();
   }, [activeSessionId]);
 
+  // Bridge Chatbot's send action to the API and refresh history after the server saves the turn.
   const handleSendMessage = async (
     message: string, 
     onChunk?: (chunk: string) => void
@@ -104,6 +109,7 @@ export default function App() {
     setShowHistory((prev) => !prev);
   };
 
+  // Start an empty conversation with a unique ID; messages persist when the first prompt is sent.
   const handleNewChat = () => {
     const newSessionId = `session_${crypto.randomUUID()}`;
     messageLoadGeneration.current++;
@@ -140,6 +146,7 @@ export default function App() {
     setActiveSessionId(sessionId);
   };
 
+  // Preset prompts from HistoryPanel use the same streaming path as typed chat messages.
   const handleSelectPrompt = async (promptText: string) => {
     try {
       setMessages((prev) => [...prev, { text: promptText, sender: 'user' }]);
@@ -181,8 +188,9 @@ export default function App() {
     setMessages([]);
   };
 
+  // Compose the slide-out history/templates panel beside the active chat window.
   return (
-    <div className="flex flex-1 h-full w-full relative overflow-hidden bg-slate-50 dark:bg-[#090d16] text-slate-900 dark:text-slate-100">
+    <div className="flex flex-1 h-full w-full relative overflow-hidden bg-[#f7f7f5] dark:bg-[#17191d] text-slate-800 dark:text-slate-100">
       <HistoryPanel 
         showHistory={showHistory} 
         onClose={() => setShowHistory(false)}

@@ -4,6 +4,7 @@ import sqlite3
 import logging
 import threading
 import hashlib
+import re
 from typing import List, Dict, Any, Optional
 from base64 import b64encode, b64decode
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -87,6 +88,9 @@ class DatabaseManager:
         """Create required tables if they don't exist."""
         with self._lock:
             conn = self._get_connection()
+            # WAL mode can only be changed outside a transaction. Set it before
+            # schema or data statements cause sqlite3 to open one.
+            conn.execute("PRAGMA journal_mode = WAL")
             cursor = conn.cursor()
             
             # Accounts table
@@ -126,12 +130,23 @@ class DatabaseManager:
                 );
             """)
 
+            # Stores one searchable metadata document per NetSuite record type and account.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS account_metadata (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id TEXT NOT NULL,
+                    record_type TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_account_metadata_account ON account_metadata(account_id)")
+
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_session_id_id ON messages(session_id, id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_account_session_id ON messages(account_id, session_id, id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_account_session ON messages(sender, account_id, session_id, timestamp)")
             cursor.execute("UPDATE accounts SET is_active = 0 WHERE is_active = 1 AND id NOT IN (SELECT id FROM accounts WHERE is_active = 1 ORDER BY updated_at DESC, id DESC LIMIT 1)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_single_active ON accounts(is_active) WHERE is_active = 1")
-            conn.execute("PRAGMA journal_mode = WAL")
             conn.commit()
             conn.close()
 
@@ -172,6 +187,53 @@ class DatabaseManager:
             os.remove(legacy_file)
         except Exception as e:
             logger.error(f"Error during legacy cache migration: {e}")
+
+    def replace_account_metadata(self, account_id: str, documents: List[Dict[str, str]]) -> int:
+        """Atomically replace the indexed metadata snapshot for one account."""
+        with self._lock:
+            conn = self._get_connection()
+            try:
+                conn.execute("DELETE FROM account_metadata WHERE account_id = ?", (account_id,))
+                conn.executemany(
+                    "INSERT INTO account_metadata (account_id, record_type, content) VALUES (?, ?, ?)",
+                    [(account_id, item["record_type"], item["content"]) for item in documents],
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        return len(documents)
+
+    def search_account_metadata(self, account_id: str, query: str, limit: int = 5) -> List[Dict[str, str]]:
+        """Return account-specific metadata documents ranked by matching query terms."""
+        stop_words = {"what", "which", "where", "show", "find", "list", "field", "fields", "record", "records", "type", "types", "available", "does", "this", "that", "with", "from", "into", "have", "for", "the", "and", "are", "how"}
+        terms = list(dict.fromkeys(
+            word.lower() for word in re.findall(r"[a-zA-Z0-9_]+", query)
+            if len(word) > 1 and word.lower() not in stop_words
+        ))
+        if not terms:
+            return []
+
+        with self._lock:
+            conn = self._get_connection()
+            try:
+                rows = conn.execute(
+                    "SELECT record_type, content FROM account_metadata WHERE account_id = ?",
+                    (account_id,),
+                ).fetchall()
+            finally:
+                conn.close()
+
+        scored = []
+        for row in rows:
+            searchable = f"{row['record_type']} {row['content']}".lower()
+            score = sum(searchable.count(term) for term in terms)
+            if score:
+                scored.append((score, row["record_type"], row["content"]))
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [
+            {"record_type": record_type, "content": content[:6000]}
+            for _, record_type, content in scored[:limit]
+        ]
 
     # --- ACCOUNTS MANAGEMENT ---
 

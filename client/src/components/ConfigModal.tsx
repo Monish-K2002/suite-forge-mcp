@@ -44,6 +44,7 @@ interface ConfigModalProps {
   onConfigSaved?: () => void;
 }
 
+// Settings dialog for NetSuite OAuth accounts, AI provider/models, and available MCP tools.
 const ConfigModal: React.FC<ConfigModalProps> = ({ 
   onClose, 
   isDarkMode, 
@@ -76,6 +77,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const toolListRef = useRef<HTMLDivElement>(null);
 
+  // Notify both the shell (to refresh badges) and chat screen (to reload account-specific history).
   const notifyConfigUpdated = useCallback(() => {
     onConfigSaved?.();
     window.dispatchEvent(new CustomEvent('suite_forge_config_updated'));
@@ -186,6 +188,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
     setFeedback(null);
   };
 
+  // Save/start NetSuite authorization for the account details entered in the NetSuite tab.
   const handleNetsuiteAuth = async () => {
     if (!accountId.trim() || !clientId.trim()) {
       setFeedback({ type: 'error', message: 'Please enter both NetSuite Account ID and Client ID.' });
@@ -286,60 +289,60 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 transition-opacity duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/35 backdrop-blur-[2px] transition-opacity duration-200">
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="system-configuration-title"
-        className={`w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden transition-all flex flex-col ${
+        className={`motion-enter w-full max-w-2xl rounded-xl border shadow-xl overflow-hidden transition-all flex flex-col ${
         isDarkMode 
-          ? 'bg-slate-900 border-slate-800 text-slate-100' 
+          ? 'bg-[#1d2025] border-slate-800 text-slate-100'
           : 'bg-white border-slate-200 text-slate-900'
       }`}
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
-              <FiLayers className="w-5 h-5" />
+            <div className="p-2 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <FiLayers className="w-4 h-4" />
             </div>
             <div>
-              <h2 id="system-configuration-title" className="text-lg font-bold tracking-tight">System Configuration</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Configure NetSuite MCP & AI Provider Credentials</p>
+              <h2 id="system-configuration-title" className="text-base font-semibold tracking-tight">Settings</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Manage your connection, model, and tools.</p>
             </div>
           </div>
           <button 
             ref={closeButtonRef}
             onClick={handleClose} 
             className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors cursor-pointer"
-            aria-label="Close system configuration"
+            aria-label="Close settings"
           >
             <FiX className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 px-6 pt-2 gap-2 bg-slate-50/50 dark:bg-slate-900/50" role="tablist" aria-label="Configuration sections">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 px-5 pt-2 gap-1 bg-slate-50 dark:bg-[#1d2025]" role="tablist" aria-label="Configuration sections">
           <button 
             role="tab"
             aria-selected={activeTab === 'netsuite'}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors cursor-pointer ${
               activeTab === 'netsuite' 
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
+                ? 'border-sky-700 text-sky-800 dark:text-sky-300 bg-white dark:bg-[#1d2025]'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
             onClick={() => { setActiveTab('netsuite'); setFeedback(null); }}
           >
             <FiDatabase className="w-4 h-4" />
-            NetSuite ERP
+            NetSuite
           </button>
           <button 
             role="tab"
             aria-selected={activeTab === 'mcp'}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors cursor-pointer ${
               activeTab === 'mcp' 
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
+                ? 'border-sky-700 text-sky-800 dark:text-sky-300 bg-white dark:bg-[#1d2025]'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
             onClick={handleSelectMcpTab}
@@ -347,7 +350,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
             <FiTool className="w-4 h-4" />
             MCP Tools
             {mcpTools.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-mono">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-mono">
                 {mcpTools.length}
               </span>
             )}
@@ -355,20 +358,20 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
           <button 
             role="tab"
             aria-selected={activeTab === 'ai'}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-xl border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors cursor-pointer ${
               activeTab === 'ai' 
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
+                ? 'border-sky-700 text-sky-800 dark:text-sky-300 bg-white dark:bg-[#1d2025]'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
             onClick={() => { setActiveTab('ai'); setFeedback(null); }}
           >
             <FiCpu className="w-4 h-4" />
-            AI Provider & Models
+            Model
           </button>
         </div>
 
         {/* Body Content */}
-        <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto" role="tabpanel">
+        <div className="p-5 sm:p-6 space-y-5 max-h-[75vh] overflow-y-auto" role="tabpanel">
           {feedback && (
             <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
               feedback.type === 'success' 
@@ -386,15 +389,15 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
 
           {activeTab === 'netsuite' && (
             <div className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 text-xs text-indigo-900 dark:text-indigo-200">
-                <p className="font-medium mb-1">NetSuite OAuth 2.0 Token-Based Authentication</p>
+              <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-[#24272d] border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300">
+                <p className="font-medium mb-1">Connect to NetSuite</p>
                 <p className="opacity-80">
-                  Connect your NetSuite instance to query records, execute SuiteQL statements, and manage transactions seamlessly via MCP.
+                  Authorize your account to query records and run SuiteQL.
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   NetSuite Account ID
                 </label>
                 <input 
@@ -403,12 +406,12 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   value={accountId}
                   onChange={(e) => setAccountId(e.target.value)}
                   placeholder="e.g. 1234567 or TSTDRV12345"
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#24272d] text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Integration Client ID
                 </label>
                 <div className="relative">
@@ -419,7 +422,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     value={clientId}
                     onChange={(e) => setClientId(e.target.value)}
                     placeholder="e.g. 849392... (NetSuite OAuth Client ID)"
-                    className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-75"
+                    className="w-full pl-9 pr-10 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#24272d] text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50 disabled:opacity-75"
                   />
                   <button
                     type="button"
@@ -436,7 +439,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 <button 
                   onClick={handleNetsuiteAuth}
                   disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-sky-700 hover:bg-sky-800 disabled:opacity-50 text-white text-sm font-medium transition-colors cursor-pointer"
                 >
                   {loading ? (
                     <>
@@ -457,16 +460,16 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
           {activeTab === 'mcp' && (
             <div className="space-y-4">
               {/* Info Header Banner */}
-              <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-cyan-500/10 border border-indigo-500/20 flex items-start gap-3">
-                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-500 shrink-0 mt-0.5">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 shrink-0 mt-0.5">
                   <FiBox className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                    Model Context Protocol (MCP) Registries
+                  <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                    Available tools
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Inspect active endpoints, tools, and schemas registered on your Suite Forge MCP server.
+                    Search the tools connected to your Suite Forge server.
                   </p>
                 </div>
               </div>
@@ -480,7 +483,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     value={toolSearchQuery}
                     onChange={(e) => setToolSearchQuery(e.target.value)}
                     placeholder="Search MCP tools by name or description..."
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#24272d] text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
                     aria-label="Search MCP tools"
                   />
                   {toolSearchQuery && (
@@ -497,7 +500,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 <button
                   onClick={fetchMcpTools}
                   disabled={fetchingTools}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all shrink-0 active:scale-95 cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-700 hover:bg-sky-800 disabled:opacity-60 text-white text-sm font-medium transition-colors shrink-0 cursor-pointer"
                 >
                   <FiRefreshCw className={`w-3.5 h-3.5 ${fetchingTools ? 'animate-spin text-white' : ''}`} />
                   <span>{fetchingTools ? 'Fetching Tools...' : 'Refresh Tools'}</span>
@@ -505,7 +508,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
               </div>
 
               {/* Tool List Container */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 shadow-sm overflow-hidden">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#22252a] overflow-hidden">
                 {/* Status Bar */}
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-xs">
                   <div className="flex items-center gap-2">
@@ -513,14 +516,14 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                       Tool Registry
                     </span>
                     {fetchingTools && (
-                      <span className="text-[10px] text-indigo-500 font-medium flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                      <span className="text-[10px] text-sky-500 font-medium flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                         Syncing with MCP...
                       </span>
                     )}
                   </div>
 
-                  <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-semibold">
+                  <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-semibold">
                     {filteredTools.length} {filteredTools.length === 1 ? 'tool' : 'tools'}
                   </span>
                 </div>
@@ -533,8 +536,8 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   {fetchingTools ? (
                     /* Skeleton Loading Animation */
                     <div className="py-8 px-4 space-y-3">
-                      <div className="flex items-center justify-center gap-2 text-xs font-medium text-indigo-500 mb-4">
-                        <FiRefreshCw className="w-4 h-4 animate-spin text-indigo-500" />
+                      <div className="flex items-center justify-center gap-2 text-xs font-medium text-sky-500 mb-4">
+                        <FiRefreshCw className="w-4 h-4 animate-spin text-sky-500" />
                         <span>Querying MCP Server Tool Specifications...</span>
                       </div>
                       {[1, 2, 3].map((i) => (
@@ -550,7 +553,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                   ) : filteredTools.length === 0 ? (
                     /* Empty State */
                     <div className="flex flex-col items-center justify-center py-10 text-center px-4">
-                      <div className="mb-3 p-3.5 rounded-full bg-indigo-500/10 text-indigo-500">
+                      <div className="mb-3 p-3.5 rounded-full bg-sky-500/10 text-sky-500">
                         <FiTool className="w-6 h-6" />
                       </div>
                       <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -571,7 +574,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                       ) : (
                         <button
                           onClick={fetchMcpTools}
-                          className="mt-3 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                          className="mt-3 px-4 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                         >
                           <FiRefreshCw className="w-3.5 h-3.5" />
                           Fetch Tools List
@@ -600,7 +603,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                             onClick={() => setExpandedTool(isExpanded ? null : tool.name)}
                             className={`absolute left-0 top-0 w-full rounded-xl border transition-all duration-200 cursor-pointer ${
                               isExpanded
-                                ? 'border-indigo-500/80 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-md'
+                                ? 'border-sky-500/80 bg-sky-50/40 dark:bg-sky-950/20 shadow-md'
                                 : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-700'
                             }`}
                             style={{ transform: `translateY(${virtualRow.start}px)` }}
@@ -617,7 +620,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                             {/* Tool Header Card */}
                             <div className="p-3 flex items-start justify-between gap-3">
                               <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0 mt-0.5">
+                                <div className="p-2 rounded-lg bg-sky-500/10 text-sky-500 shrink-0 mt-0.5">
                                   <FiTool className="w-4 h-4" />
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -625,7 +628,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                                     <h4 className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100 truncate">
                                       {tool.name}
                                     </h4>
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-medium bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
                                       MCP
                                     </span>
                                   </div>
@@ -652,7 +655,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                                 </button>
                                 <div className="text-slate-400">
                                   {isExpanded ? (
-                                    <FiChevronDown className="w-4 h-4 text-indigo-500" />
+                                    <FiChevronDown className="w-4 h-4 text-sky-500" />
                                   ) : (
                                     <FiChevronRight className="w-4 h-4" />
                                   )}
@@ -666,7 +669,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                                 {hasProperties ? (
                                   <div>
                                     <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                                      <FiCode className="w-3 h-3 text-indigo-400" />
+                                      <FiCode className="w-3 h-3 text-sky-400" />
                                       <span>Input Arguments Schema</span>
                                     </div>
                                     <div className="space-y-1.5">
@@ -675,10 +678,10 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                                         return (
                                           <div
                                             key={propKey}
-                                            className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs flex flex-col gap-0.5"
+                                            className="p-2 rounded-lg bg-white dark:bg-[#1d2025] border border-slate-200 dark:border-slate-800 text-xs flex flex-col gap-0.5"
                                           >
                                             <div className="flex items-center justify-between gap-2">
-                                              <span className="font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                                              <span className="font-mono font-semibold text-sky-600 dark:text-sky-400">
                                                 {propKey}
                                               </span>
                                               <div className="flex items-center gap-1.5">
@@ -738,7 +741,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                       onClick={() => handleProviderChange(prov.id)}
                       className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                         apiProvider === prov.id 
-                          ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                          ? 'border-sky-600 bg-sky-50/50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 shadow-sm'
                           : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300'
                       }`}
                     >
@@ -750,7 +753,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
 
               {/* API Key */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Provider API Key
                 </label>
                 <div className="relative">
@@ -760,7 +763,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                   placeholder={apiProvider ? (hasSavedApiKey ? 'API key saved. Enter a new key to replace it.' : `Enter ${apiProvider.toUpperCase()} API Key...`) : "Select provider first"}
-                    className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-75"
+                    className="w-full pl-9 pr-10 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#24272d] text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50 disabled:opacity-75"
                   />
                   <button
                     type="button"
@@ -775,14 +778,14 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
 
               {/* Model selection */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                   Available Model
                 </label>
                 <div className="flex gap-2">
                   <select 
                     value={selectedModel}
                     onChange={(e) => setSelectedModel(e.target.value)}
-                    className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer"
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#24272d] text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/50 cursor-pointer"
                   >
                     {modelList.length === 0 ? (
                       <option value="">No models fetched yet. Click 'Fetch Models'.</option>
@@ -808,7 +811,7 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
               {inUseModelName && (
                 <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs flex items-center justify-between">
                   <span className="text-slate-500 dark:text-slate-400">Active Model:</span>
-                  <span className="font-semibold text-indigo-600 dark:text-indigo-400 font-mono">{inUseModelName}</span>
+                  <span className="font-semibold text-sky-600 dark:text-sky-400 font-mono">{inUseModelName}</span>
                 </div>
               )}
 
@@ -816,10 +819,10 @@ const ConfigModal: React.FC<ConfigModalProps> = ({
                 <button 
                   onClick={useModel}
                   disabled={loading || !selectedModel}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-sky-700 hover:bg-sky-800 disabled:opacity-50 text-white text-sm font-medium transition-colors cursor-pointer"
                 >
                   <FiCheckCircle className="w-4 h-4" />
-                  Save & Apply Model Configuration
+                  Save model
                 </button>
               </div>
             </div>
